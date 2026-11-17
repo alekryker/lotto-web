@@ -78,7 +78,7 @@ input,select{padding:9px 11px;border:1.5px solid #d4d4d8;border-radius:10px;back
 </div>
 </div>
 
-<script src="config.js"></script>
+<script>document.write('<script src="config.js?v=' + Date.now() + '"><\/script>');</script>
 <script>
 var API = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || "";
 var KEY_STORE = "admin_key";

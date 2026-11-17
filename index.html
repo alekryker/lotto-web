@@ -354,7 +354,7 @@ input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-ou
 <div class="loading" id="loading"><div class="spinner"></div></div>
 <div class="toast" id="toast">เพิ่มสำเร็จ</div>
 
-<script src="config.js"></script>
+<script>document.write('<script src="config.js?v=' + Date.now() + '"><\/script>');</script>
 <script>
 /* ===================== CONFIG ===================== */
 var API = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || "";
