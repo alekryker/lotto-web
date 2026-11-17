@@ -361,6 +361,7 @@ body.capturing #confirmOverlay .dialog-body{overflow:visible}
 <div class="toast" id="toast">เพิ่มสำเร็จ</div>
 
 <script>document.write('<script src="config.js?v=' + Date.now() + '"><\/script>');</script>
+<script src="legacy-parser.js?v=V1117-2"></script>
 <script>
 /* ===================== CONFIG ===================== */
 var API = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || "";
@@ -372,7 +373,10 @@ var MODES = {
   two:    { label: "2 ตัว",    len: 2, reverse: true,  double: true,  priceA: "บน",    priceB: "ล่าง" },
   three:  { label: "3 ตัว",    len: 3, reverse: true,  double: false, priceA: "ตรง",   priceB: "โต๊ด" },
   six:    { label: "6 กลับ",   len: 3, reverse: false, double: false, priceA: "บนตรง", priceB: null },
-  gate19: { label: "19 ประตู", len: 1, reverse: false, double: false, priceA: "บน",    priceB: "ล่าง" }
+  gate19: { label: "19 ประตู", len: 1, reverse: false, double: false, priceA: "บน",    priceB: "ล่าง" },
+  /* บิลจากตัวอ่านโพยของบอทเดิม: เลขขยายแล้ว + ราคา (ชื่อแสดงใช้ bill.label) */
+  raw2:   { label: "2 ตัว",    len: 2, reverse: false, double: false, priceA: "บน",    priceB: "ล่าง" },
+  raw3:   { label: "3 ตัว",    len: 3, reverse: false, double: false, priceA: "ตรง",   priceB: "โต๊ด" }
 };
 
 /* ===================== STATE ===================== */
@@ -970,7 +974,7 @@ function renderBills() {
       '<div class="bill-head"><div class="bill-mode"></div><div class="bill-subtotal"></div></div>' +
       '<div class="bill-body"><div class="bill-meta"></div><div class="bill-numbers"></div></div>' +
       '<div class="bill-foot"><button type="button" class="delete-bill">ลบบิล</button></div>';
-    card.querySelector(".bill-mode").textContent = MODES[bill.mode].label;
+    card.querySelector(".bill-mode").textContent = billLabel(bill);
     card.querySelector(".bill-subtotal").textContent = numberWithCommas(bill.subtotal) + " บาท";
     card.querySelector(".bill-meta").textContent = getBillMeta(bill);
     card.querySelector(".bill-numbers").textContent = bill.numbers.join(" ");
@@ -983,6 +987,10 @@ function renderBills() {
 
   els.billsCount.textContent = state.bills.length + " บิล";
   updateGrandTotal();
+}
+
+function billLabel(bill) {
+  return bill.label ? MODES[bill.mode].label + " · " + bill.label : MODES[bill.mode].label;
 }
 
 function getBillMeta(bill) {
@@ -1071,6 +1079,14 @@ function buildPayloads() {
       });
     }
 
+    if (bill.mode === "raw2") {
+      pushPair(bill, bill.betNumbers, bill.label + " บน", "two_top", "บน", bill.label + " ล่าง", "two_bottom", "ล่าง");
+    }
+
+    if (bill.mode === "raw3") {
+      pushPair(bill, bill.betNumbers, bill.label + " ตรง", "three_top", "ตรง", bill.label + " โต๊ด", "three_tod", "โต๊ด");
+    }
+
     if (bill.mode === "gate19") {
       bill.sourceNumbers.forEach(function (src) {
         pushPair(bill, get19GateNumbers(src), "19 ประตู บน", "two_top", "บน", "19 ประตู ล่าง", "two_bottom", "ล่าง");
@@ -1134,7 +1150,7 @@ function renderConfirm() {
   els.confirmBody.appendChild(summary);
 
   state.bills.forEach(function (bill) {
-    els.confirmBody.appendChild(createBillGroup(MODES[bill.mode].label, getBillMeta(bill), bill.numbers.join(" ")));
+    els.confirmBody.appendChild(createBillGroup(billLabel(bill), getBillMeta(bill), bill.numbers.join(" ")));
   });
 }
 
@@ -1233,7 +1249,7 @@ function showDone(order) {
   if (!bankNumber) els.doneBody.querySelector(".bank-box").style.display = "none";
 
   order.bills.forEach(function (bill) {
-    els.doneBody.appendChild(createBillGroup(MODES[bill.mode].label, getBillMeta(bill), bill.numbers.join(" ")));
+    els.doneBody.appendChild(createBillGroup(billLabel(bill), getBillMeta(bill), bill.numbers.join(" ")));
   });
 
   els.doneOverlay.classList.add("show");
@@ -1399,7 +1415,47 @@ var LottoImport = (function () {
     return { flags: f, numbers: numPart.match(/\d+/g) || [], a: a, b: b };
   }
 
+  function slipError(msg) {
+    var e = new Error(msg);
+    e.isSlip = true;
+    return e;
+  }
+
+  /* ตัวอ่านหลัก: ใช้ตัวอ่านของบอทเดิม (legacy-parser.js) ถ้าโหลดได้ ไม่งั้นใช้ตัวอ่านแบบง่าย */
   function parse(text) {
+    if (!window.LegacyParser) return parseSimple(text);
+
+    var r = window.LegacyParser.parse(text, state.lottos);
+    if (!r.ok) {
+      var e = new Error(r.error || "อ่านโพยไม่ได้");
+      e.isSlip = !!r.isSlip;
+      throw e;
+    }
+    var lotto = state.lottos.filter(function (l) { return l.name === r.lotto; })[0];
+    if (!lotto) throw slipError("ไม่พบหวย " + r.lotto);
+
+    var bills = (r.groups || []).map(function (g) {
+      var label = String(g.mode || "").trim();
+      var nums = (g.numbers || []).map(String);
+      var len = nums.length ? nums[0].length : 0;
+      if (!nums.length || (len !== 2 && len !== 3) || nums.some(function (n) { return !/^\d+$/.test(n) || n.length !== len; })) {
+        throw slipError("รองรับเฉพาะเลข 2 หรือ 3 หลัก (" + label + ")");
+      }
+      var top = Number(g.top) || 0, bottom = Number(g.bottom) || 0;
+      // บอทเดิมเก็บราคา "โต๊ด" ไว้ในช่อง top
+      if (len === 3 && label === "โต๊ด" && bottom === 0) { bottom = top; top = 0; }
+      if (top < 0 || bottom < 0 || top + bottom <= 0) throw slipError("ราคาไม่ถูกต้อง (" + label + ")");
+      // ยอดต้องตรงกับที่เว็บ/เซิร์ฟเวอร์คิด (จำนวนเลข × ราคา) ไม่งั้นให้คนดู
+      if (Math.abs(nums.length * (top + bottom) - Number(g.subtotal)) > 0.001) {
+        throw slipError("ยอดของ " + label + " คิดไม่ตรงกับเว็บ");
+      }
+      return { raw: true, mode: len === 3 ? "raw3" : "raw2", label: label, numbers: nums, a: top, b: bottom };
+    });
+    if (!bills.length) throw slipError("ไม่พบรายการแทงในข้อความ");
+    return { lotto: lotto, bills: bills };
+  }
+
+  function parseSimple(text) {
     var lotto = findLotto(text);
     if (!lotto) throw new Error("ไม่พบชื่อหวยในข้อความ");
     var body = stripLottoName(text, lotto);
@@ -1482,6 +1538,27 @@ var LottoImport = (function () {
   }
 
   function addParsedBill(p) {
+    if (p.raw) {
+      var lotto = state.selectedLotto;
+      state.bills.push({
+        id: createId(),
+        mode: p.mode,
+        label: p.label,
+        lottoName: lotto.name,
+        roundDate: getRoundDateText(lotto),
+        closeTime: lotto.closeTime || "",
+        sourceNumbers: [],
+        numbers: unique(p.numbers),
+        betNumbers: p.numbers.slice(),
+        betCount: p.numbers.length,
+        reverseApplied: false,
+        priceA: p.a,
+        priceB: p.b,
+        subtotal: p.numbers.length * (p.a + p.b)
+      });
+      renderBills();
+      return;
+    }
     setMode(p.mode);
     p.sources.forEach(addSourceNumber);
     if (p.reverse) reverseNumbers();
@@ -1566,13 +1643,13 @@ var LottoImport = (function () {
     return waitFor(function () { return state.lottos.length; }, 20000)
       .then(function () {
         var text = String((o && o.text) || "");
-        if (!findLotto(text)) return { ok: false, isSlip: false, error: "ไม่พบชื่อหวย" };
         try {
           var p = parse(text);
           if (isClosed(p.lotto)) return { ok: false, isSlip: true, closed: true, lotto: p.lotto.name, error: p.lotto.name + " ปิดรับแล้ว" };
           return { ok: true, isSlip: true, lotto: p.lotto.name };
         } catch (e) {
-          return { ok: false, isSlip: true, error: e.message };
+          var isSlip = typeof e.isSlip === "boolean" ? e.isSlip : !!findLotto(text);
+          return { ok: false, isSlip: isSlip, error: e.message };
         }
       })
       .catch(function () { return { ok: false, isSlip: false, error: "โหลดรายการหวยไม่สำเร็จ" }; });

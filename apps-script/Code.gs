@@ -27,7 +27,7 @@ function setup() {
 
   var lotto = ss.getSheetByName(SH_LOTTO) || ss.insertSheet(SH_LOTTO);
   if (lotto.getLastRow() === 0) {
-    lotto.appendRow(['ชื่อหวย', 'เวลาปิด (HH:mm)', 'เปิดรับ']);
+    lotto.appendRow(['ชื่อหวย', 'เวลาปิด (HH:mm)', 'เปิดรับ', 'ชื่อเรียกอื่น (คั่นด้วยช่องว่าง)']);
     lotto.getRange('B:B').setNumberFormat('@');
     lotto.getRange(2, 1, 4, 3).setValues([
       ['หวยฮานอย', '18:10', true],
@@ -92,9 +92,16 @@ function doPost(e) {
 function readLottos_() {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_LOTTO);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues()
+  // คอลัมน์ D (ไม่บังคับ) = ชื่อเรียกอื่น คั่นด้วยช่องว่าง เช่น "ลาวex เอ็กตร้า"
+  var cols = Math.max(3, Math.min(4, sh.getLastColumn()));
+  return sh.getRange(2, 1, sh.getLastRow() - 1, cols).getValues()
     .map(function (r) {
-      return { name: String(r[0]).trim(), closeTime: normTime_(r[1]), open: r[2] === true || String(r[2]).toUpperCase() === 'TRUE' };
+      return {
+        name: String(r[0]).trim(),
+        closeTime: normTime_(r[1]),
+        open: r[2] === true || String(r[2]).toUpperCase() === 'TRUE',
+        aliases: String(r[3] || '').trim().split(/\s+/).filter(Boolean)
+      };
     })
     .filter(function (l) { return l.name && l.closeTime; });
 }
@@ -134,7 +141,7 @@ function openLottos_() {
     .filter(function (l) { return l.open; })
     .map(function (l) {
       var r = roundOf_(l, now);
-      return { name: l.name, closeTime: l.closeTime, drawDate: r.drawDate };
+      return { name: l.name, closeTime: l.closeTime, drawDate: r.drawDate, aliases: l.aliases };
     });
 }
 
