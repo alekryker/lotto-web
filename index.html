@@ -198,6 +198,12 @@ input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-ou
   .confirm-summary{grid-template-columns:1fr}
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* โหมดแคปรูปส่งลูกค้า (ส่วนขยายใช้) */
+body.capturing .dialog-foot,body.capturing .confirm-error,body.capturing .toast{display:none}
+body.capturing #confirmOverlay{align-items:flex-start;justify-content:center;padding:0;background:#fff;backdrop-filter:none;-webkit-backdrop-filter:none}
+body.capturing #confirmOverlay .dialog{max-height:none;border-radius:0;box-shadow:none}
+body.capturing #confirmOverlay .dialog-body{overflow:visible}
 </style>
 </head>
 <body>
@@ -1315,6 +1321,245 @@ function escapeHtml(s) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
   });
 }
+
+/* =====================================================
+   ลงโพยจากข้อความ (ใช้โดยส่วนขยาย "ลงโพยจาก LINE OA")
+   รูปแบบที่อ่านได้ (หนึ่งบรรทัด = หนึ่งรายการ):
+     ลาวExtra                    ← ชื่อหวย (ที่ไหนก็ได้ในข้อความ)
+     12=10*10                    ← 2 ตัว บน 10 ล่าง 10
+     12=10*10 กลับ / 12 กลับ 10*10
+     123=10*10                   ← 3 ตัว ตรง 10 โต๊ด 10
+     123 6กลับ 10                ← 6 กลับ
+     12/34/56 = 20*20            ← หลายเลขราคาเดียว
+     รูด 1-2 10*10 / 19 ประตู 1 และ 2 ตัวละ 10*10
+     12 บน 10 / 12 ล่าง 10       ← ราคาเดียว
+   บรรทัดที่มีแต่เลข จะรอราคาจากบรรทัดถัดไป
+====================================================== */
+var LottoImport = (function () {
+  var THAI_DIGITS = "๐๑๒๓๔๕๖๗๘๙";
+
+  function normName(s) {
+    return String(s || "").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]/gu, "");
+  }
+
+  function findLotto(text) {
+    var nt = normName(text), best = null;
+    state.lottos.forEach(function (l) {
+      var nn = normName(l.name);
+      if (nn && nt.indexOf(nn) !== -1 && (!best || nn.length > normName(best.name).length)) best = l;
+    });
+    return best;
+  }
+
+  /* ลบชื่อหวยออกจากข้อความ (ยอมให้มีช่องว่าง/อีโมจิคั่น) */
+  function stripLottoName(text, lotto) {
+    var chars = Array.from(normName(lotto.name)).map(function (c) { return c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); });
+    var re = new RegExp(chars.join("[^\\p{L}\\p{M}\\p{N}]*"), "giu");
+    return text.replace(re, " ");
+  }
+
+  function parseLine(raw) {
+    var s = String(raw).replace(/[๐-๙]/g, function (d) { return String(THAI_DIGITS.indexOf(d)); });
+    var f = { gate: false, six: false, rev: false, top: /บน|ตรง/.test(s), bottom: /ล่าง|โต๊ด|โต้ด|โตด/.test(s) };
+
+    if (/19\s*ประตู|รูด|ประตู/.test(s)) { f.gate = true; s = s.replace(/19\s*ประตู|รูด|ประตู/g, " "); }
+    if (/(6|หก)\s*กลับ/.test(s)) { f.six = true; s = s.replace(/(6|หก)\s*กลับ/g, " "); }
+    else if (/กลับ/.test(s)) { f.rev = true; }
+
+    var a = null, b = null, numPart = s, m;
+
+    if ((m = s.match(/(\d+)\s*[*xX×]\s*(\d+)/))) {
+      a = +m[1]; b = +m[2];
+      numPart = s.slice(0, m.index) + " " + s.slice(m.index + m[0].length);
+    } else if ((m = s.match(/=\s*(\d+)/))) {
+      a = +m[1];
+      numPart = s.slice(0, m.index) + " " + s.slice(m.index + m[0].length);
+    } else {
+      /* ไม่มี = หรือ * : หาราคาจากคำ "ละ" หรือเลขหลังคำ กลับ/บน/ล่าง/ตรง/โต๊ด */
+      var kw = /ตัวละ|ละ|กลับ|บน|ล่าง|ตรง|โต๊ด|โต้ด|โตด/g, last = -1, km;
+      while ((km = kw.exec(s))) last = km.index + km[0].length;
+      var after = last >= 0 ? (s.slice(last).match(/\d+/g) || []) : [];
+      if (after.length && after.length <= 2) {
+        a = +after[0]; b = after.length > 1 ? +after[1] : null;
+        numPart = s.slice(0, last);
+      } else {
+        var toks = s.match(/\d+/g) || [];
+        if (toks.length >= 2 && toks[toks.length - 1].length !== toks[0].length) {
+          a = +toks[toks.length - 1];
+          numPart = s.slice(0, s.lastIndexOf(toks[toks.length - 1]));
+        }
+      }
+    }
+
+    if (a !== null && b === null) {
+      b = 0;
+      if (f.bottom && !f.top) { b = a; a = 0; }
+    }
+
+    return { flags: f, numbers: numPart.match(/\d+/g) || [], a: a, b: b };
+  }
+
+  function parse(text) {
+    var lotto = findLotto(text);
+    if (!lotto) throw new Error("ไม่พบชื่อหวยในข้อความ");
+    var body = stripLottoName(text, lotto);
+
+    var bills = [], pending = [];
+
+    function flush(nums, f, a, b, line) {
+      if (!(a > 0 || b > 0)) throw new Error("ราคาไม่ถูกต้อง: " + line);
+      if (f.gate) {
+        var digits = [];
+        nums.forEach(function (n) {
+          if (n.length !== 1) throw new Error("19 ประตู ต้องเป็นเลขตัวเดียว: " + line);
+          digits.push(n);
+        });
+        bills.push({ mode: "gate19", sources: digits, reverse: false, a: a, b: b });
+        return;
+      }
+      var by = {};
+      nums.forEach(function (n) {
+        if (n.length !== 2 && n.length !== 3) throw new Error("เลขต้องเป็น 2 หรือ 3 หลัก: " + n + " (" + line + ")");
+        (by[n.length] = by[n.length] || []).push(n);
+      });
+      if (by[2]) {
+        if (f.six) throw new Error("6 กลับ ต้องเป็นเลข 3 หลัก: " + line);
+        bills.push({ mode: "two", sources: by[2], reverse: f.rev, a: a, b: b });
+      }
+      if (by[3]) {
+        if (f.six) bills.push({ mode: "six", sources: by[3], reverse: false, a: a || b, b: 0 });
+        else bills.push({ mode: "three", sources: by[3], reverse: f.rev, a: a, b: b });
+      }
+    }
+
+    body.split(/\r?\n/).forEach(function (line) {
+      if (!/\d/.test(line)) return;
+      var p = parseLine(line);
+      if (p.a === null) {
+        if (p.numbers.length) pending.push({ nums: p.numbers, flags: p.flags, line: line.trim() });
+        return;
+      }
+      if (p.numbers.length) {
+        flush(p.numbers, p.flags, p.a, p.b, line.trim());
+      } else if (pending.length) {
+        pending.forEach(function (q) {
+          var f = { gate: q.flags.gate || p.flags.gate, six: q.flags.six || p.flags.six, rev: q.flags.rev || p.flags.rev };
+          flush(q.nums, f, p.a, p.b, q.line + " " + line.trim());
+        });
+        pending = [];
+      } else {
+        throw new Error("มีราคาแต่ไม่มีเลข: " + line.trim());
+      }
+    });
+
+    if (pending.length) throw new Error("ไม่มีราคา: " + pending.map(function (q) { return q.line; }).join(" / "));
+    if (!bills.length) throw new Error("ไม่พบรายการแทงในข้อความ");
+    return { lotto: lotto, bills: bills };
+  }
+
+  function waitFor(fn, ms) {
+    var t0 = Date.now();
+    return new Promise(function (resolve, reject) {
+      (function tick() {
+        var v;
+        try { v = fn(); } catch (e) { v = null; }
+        if (v) return resolve(v);
+        if (Date.now() - t0 > ms) return reject(new Error("หมดเวลารอ"));
+        setTimeout(tick, 150);
+      })();
+    });
+  }
+
+  function resetPage() {
+    els.confirmOverlay.classList.remove("show");
+    els.doneOverlay.classList.remove("show");
+    document.body.classList.remove("capturing");
+    state.bills = [];
+    clearCurrent();
+    clearPrices();
+    renderBills();
+    state.selectedLotto = null;
+  }
+
+  function addParsedBill(p) {
+    setMode(p.mode);
+    p.sources.forEach(addSourceNumber);
+    if (p.reverse) reverseNumbers();
+    els.priceA.value = p.a > 0 ? p.a : "";
+    els.priceB.value = p.b > 0 && MODES[p.mode].priceB ? p.b : "";
+    updateLiveTotal();
+    var n = state.bills.length;
+    addBill();
+    if (state.bills.length !== n + 1) throw new Error(els.error.textContent || "เพิ่มบิลไม่สำเร็จ");
+  }
+
+  /* ลงโพยแล้วเปิดหน้าตรวจสอบในโหมดแคป → คืนตำแหน่งกล่องสำหรับครอปรูป */
+  function fill(o) {
+    return waitFor(function () { return state.lottos.length; }, 20000)
+      .catch(function () { throw new Error("โหลดรายการหวยไม่สำเร็จ"); })
+      .then(function () {
+        resetPage();
+        var parsed = parse(String(o.text || ""));
+        if (isClosed(parsed.lotto)) throw new Error(parsed.lotto.name + " ปิดรับแล้ว");
+        chooseLotto(parsed.lotto);
+        parsed.bills.forEach(addParsedBill);
+        openConfirm();
+        if (!els.confirmOverlay.classList.contains("show")) throw new Error(els.error.textContent || "เปิดหน้าตรวจสอบไม่สำเร็จ");
+        els.customerName.value = String(o.name || "").trim();
+        els.customerPhone.value = "";
+        document.body.classList.add("capturing");
+        window.scrollTo(0, 0);
+        return new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+      })
+      .then(function () {
+        var rc = document.querySelector("#confirmOverlay .dialog").getBoundingClientRect();
+        return {
+          ok: true,
+          lotto: parsed_name(),
+          total: getGrandTotal(),
+          count: state.bills.reduce(function (s, b) { return s + b.betCount; }, 0),
+          rect: { x: rc.left, y: rc.top, width: rc.width, height: Math.min(rc.height, window.innerHeight - rc.top) },
+          vw: window.innerWidth
+        };
+      })
+      .catch(function (e) {
+        resetPage();
+        showLottoScreen();
+        return { ok: false, error: e.message || String(e) };
+      });
+  }
+
+  function parsed_name() { return state.selectedLotto ? state.selectedLotto.name : ""; }
+
+  function endCapture() {
+    document.body.classList.remove("capturing");
+    return { ok: true };
+  }
+
+  /* กดยืนยันส่งโพยจริง */
+  function submit() {
+    document.body.classList.remove("capturing");
+    if (!els.confirmOverlay.classList.contains("show")) return Promise.resolve({ ok: false, error: "ไม่มีโพยรอยืนยัน" });
+    els.error.textContent = "";
+    confirmAndSend();
+    return waitFor(function () {
+      if (els.doneOverlay.classList.contains("show")) return { done: true };
+      if (!state.sending && els.error.textContent) return { err: els.error.textContent };
+      if (els.confirmOverlay.classList.contains("show") && els.confirmError.textContent) return { err: els.confirmError.textContent };
+      return null;
+    }, 60000).then(function (r) {
+      if (r.err) return { ok: false, error: r.err };
+      var ref = (els.doneSubtitle.textContent.split("เลขที่ ")[1] || "").trim();
+      finishOrder();
+      return { ok: true, ref: ref };
+    }).catch(function (e) { return { ok: false, error: e.message }; });
+  }
+
+  function cancel() { resetPage(); showLottoScreen(); return { ok: true }; }
+
+  return { parse: parse, fill: fill, endCapture: endCapture, submit: submit, cancel: cancel };
+})();
+window.LottoImport = LottoImport;
 </script>
 </body>
 </html>
