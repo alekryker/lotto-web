@@ -1272,6 +1272,9 @@ function showDone(order) {
   var bankNumber = bank.number || "";
   var bankName = bank.name || "";
   var bankTitle = bank.bank || "";
+  // ชีตใส่ "เลขบัญชี" กับ "ธนาคาร" สลับแถวกันได้ → ช่องที่มีตัวเลขคือเลขบัญชี
+  if (!/\d{6,}/.test(bankNumber) && /\d{6,}/.test(bankTitle)) { var t = bankNumber; bankNumber = bankTitle; bankTitle = t; }
+  bankNumber = (bankNumber.match(/[\d-]{6,}/) || [bankNumber])[0];
 
   els.doneSubtitle.textContent = order.lottoName + " • เลขที่ " + order.orderRef;
   els.doneBody.innerHTML =
@@ -1651,6 +1654,7 @@ var LottoImport = (function () {
           total: getGrandTotal(),
           count: state.bills.reduce(function (s, b) { return s + b.betCount; }, 0),
           rect: { x: rc.left, y: rc.top, width: rc.width, height: Math.min(rc.height, window.innerHeight - rc.top) },
+          bank: state.bank || null,
           vw: window.innerWidth
         };
       })
