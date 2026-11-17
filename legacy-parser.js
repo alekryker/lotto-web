@@ -20629,7 +20629,7 @@ function testNaturalRoodModeV1117_() {
 }
 
 ;
-    return { parseMessage: parseMessage, cleanIncomingLineText_: cleanIncomingLineText_, normalizeRawHighPriorityBetSyntax_: normalizeRawHighPriorityBetSyntax_, normalizeMainPreParseCustomBet_: normalizeMainPreParseCustomBet_, normalizePerLineAssignedBetFormat_: normalizePerLineAssignedBetFormat_, normalizeLegacyNaturalBetFormat_: normalizeLegacyNaturalBetFormat_, stripLottoNameFromText: stripLottoNameFromText, findLottoSafe_: findLottoSafe_, findMultipleLottosInText_: findMultipleLottosInText_, isClosed: isClosed };
+    return { parseMessage: parseMessage, cleanIncomingLineText_: cleanIncomingLineText_, normalizeRawHighPriorityBetSyntax_: normalizeRawHighPriorityBetSyntax_, normalizeMainPreParseCustomBet_: normalizeMainPreParseCustomBet_, normalizePerLineAssignedBetFormat_: normalizePerLineAssignedBetFormat_, normalizeLegacyNaturalBetFormat_: normalizeLegacyNaturalBetFormat_, stripLottoNameFromText: stripLottoNameFromText, findLottoSafe_: findLottoSafe_, findMultipleLottosInText_: findMultipleLottosInText_, stripMultipleLottoNamesFromText_: stripMultipleLottoNamesFromText_, isClosed: isClosed, hasRealBetPayload_: hasRealBetPayload_, looksLikeStandaloneCompleteBet_: looksLikeStandaloneCompleteBet_, looksLikeBet: looksLikeBet };
   })(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, Utilities, quiet, sandbox);
 
   function cleanLines(t) {
@@ -20644,47 +20644,89 @@ function testNaturalRoodModeV1117_() {
     return String(text).replace(re, " ");
   }
 
-  function parse(raw, lottos) {
+  function toData(lottos) {
     var data = { map: {}, aliasMap: {} };
     (lottos || []).forEach(function (l) {
       data.map[l.name] = l.closeTime;
       data.aliasMap[l.name] = (l.aliases || []).filter(Boolean);
     });
+    return data;
+  }
 
+  function prep(raw) {
     var text = L.cleanIncomingLineText_(String(raw || ""));
     text = text.replace(/19\s*ประตู/g, "รูด");          // "19 ประตู" = รูด
     text = text.replace(/(\d)\s*และ\s*(?=\d)/g, "$1 ");  // "1 และ 2" (ตัว ล ใน "และ" ทำให้บอทเดิมหยุดอ่านเลข)
+    return text;
+  }
 
-    var multi = L.findMultipleLottosInText_(text, data);
-    if (multi && multi.length > 1) {
-      return { ok: false, isSlip: true, error: "โพยมีหลายหวยในข้อความเดียว: " + multi.map(function (m) { return m.name; }).join(", ") };
-    }
-
-    var m = L.findLottoSafe_(text, data);
-    if (!m) return { ok: false, isSlip: false, error: "ไม่พบชื่อหวย" };
-    if (m.ambiguous || !m.name) {
-      return { ok: false, isSlip: true, error: "ชื่อหวยกำกวม: " + (m.candidates || []).map(function (c) { return c.name; }).join(", ") };
-    }
-
-    // ตัดชื่อหวยออกก่อน แล้วค่อยแปลงข้อความ
-    // (ตัวแปลงของบอทเดิมเปลี่ยน x เป็น * ทำให้ชื่อเช่น "ลาวExtra" เพี้ยน)
-    text = L.stripLottoNameFromText(text, m.name, data, m.matchedToken);
-    text = stripNameLoose(text, m.name);
+  /* อ่านตัวโพย (ตัดชื่อหวยออกแล้ว) */
+  function parseBody(text, name) {
     text = L.normalizeRawHighPriorityBetSyntax_(text);
-
-    var pre = L.normalizeMainPreParseCustomBet_(text, m.name) ||
-      L.normalizePerLineAssignedBetFormat_(text, m.name) ||
-      L.normalizeLegacyNaturalBetFormat_(text, m.name);
+    var pre = L.normalizeMainPreParseCustomBet_(text, name || "") ||
+      L.normalizePerLineAssignedBetFormat_(text, name || "") ||
+      L.normalizeLegacyNaturalBetFormat_(text, name || "");
     if (pre) text = pre;
 
     var cmd = cleanLines(text);
-    if (!/\d/.test(cmd)) return { ok: false, isSlip: false, lotto: m.name, error: "ไม่มีเลขในข้อความ" };
+    if (!/\d/.test(cmd)) return { ok: false, isSlip: false, error: "ไม่มีเลขในข้อความ" };
 
     // ไม่ถามกลับเลข: ลงตามที่ลูกค้าพิมพ์
     var r = L.parseMessage(cmd, ["รูด"], {});
-    if (!r || !r.success) return { ok: false, isSlip: true, lotto: m.name, error: String((r && r.error) || "อ่านโพยไม่ได้").replace(/^❌\s*/, "") };
+    if (!r || !r.success) return { ok: false, isSlip: true, error: String((r && r.error) || "อ่านโพยไม่ได้").replace(/^❌\s*/, "") };
+    return { ok: true, isSlip: true, groups: r.groups, total: r.totalAmount, count: r.totalDoors, cmd: cmd };
+  }
 
-    return { ok: true, isSlip: true, lotto: m.name, groups: r.groups, total: r.totalAmount, count: r.totalDoors, cmd: cmd };
+  /* ข้อความเป็นโพยที่ "ขาดชื่อหวย" ไหม (ใช้ถามลูกค้าว่าซื้อหวยไหน) */
+  function looksLikeSlipWithoutLotto(raw) {
+    var text = prep(raw);
+    // ลูกค้าคิดเลขทอน เช่น 500-380=120 → ไม่ใช่โพย
+    var mm = text.trim().match(/^(\d+)\s*([-+])\s*(\d+)\s*=\s*(\d+)$/);
+    if (mm && (mm[2] === "-" ? +mm[1] - +mm[3] : +mm[1] + +mm[3]) === +mm[4]) return false;
+    if (!L.looksLikeBet(text)) return false;
+    return parseBody(text, "").ok;
+  }
+
+  /*
+   * opts.only = ชื่อหวย → ใช้เมื่อโพยมีหลายหวย ให้อ่านเฉพาะหวยนี้
+   * ผลลัพธ์พิเศษ:
+   *   { multi: true, lottos: [ชื่อ, ...] }   โพยหลายหวย (เรียกซ้ำด้วย opts.only ทีละหวย)
+   *   { needLotto: true }                    มีโพยแต่ไม่มีชื่อหวย
+   */
+  function parse(raw, lottos, opts) {
+    opts = opts || {};
+    var data = toData(lottos);
+    var text = prep(raw);
+    var name;
+
+    var multi = L.findMultipleLottosInText_(text, data) || [];
+    if (multi.length > 1) {
+      var names = multi.map(function (m) { return m.name; });
+      if (!opts.only) return { ok: false, isSlip: true, multi: true, lottos: names, error: "โพยหลายหวย: " + names.join(", ") };
+      if (names.indexOf(opts.only) === -1) return { ok: false, isSlip: true, error: "ไม่พบ " + opts.only + " ในโพย" };
+      name = opts.only;
+      text = L.stripMultipleLottoNamesFromText_(text, multi, data);
+      names.forEach(function (n) { text = stripNameLoose(text, n); });
+    } else {
+      var m = L.findLottoSafe_(text, data);
+      if (!m) {
+        var need = looksLikeSlipWithoutLotto(raw);
+        return { ok: false, isSlip: need, needLotto: need, error: "ไม่พบชื่อหวย" };
+      }
+      if (m.ambiguous || !m.name) {
+        return { ok: false, isSlip: true, error: "ชื่อหวยกำกวม: " + (m.candidates || []).map(function (c) { return c.name; }).join(", ") };
+      }
+      if (opts.only && opts.only !== m.name) return { ok: false, isSlip: true, error: "ไม่พบ " + opts.only + " ในโพย" };
+      name = m.name;
+      // ตัดชื่อหวยออกก่อน แล้วค่อยแปลงข้อความ
+      // (ตัวแปลงของบอทเดิมเปลี่ยน x เป็น * ทำให้ชื่อเช่น "ลาวExtra" เพี้ยน)
+      text = L.stripLottoNameFromText(text, m.name, data, m.matchedToken);
+      text = stripNameLoose(text, m.name);
+    }
+
+    var r = parseBody(text, name);
+    r.lotto = name;
+    return r;
   }
 
   window.LegacyParser = { parse: parse, _L: L, version: "V1117-RUDMODE-NATURAL" };

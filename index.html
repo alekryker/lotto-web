@@ -388,7 +388,7 @@ body.capturing #confirmOverlay .dialog-body{overflow:visible}
 <div class="toast" id="toast">เพิ่มสำเร็จ</div>
 
 <script>document.write('<script src="config.js?v=' + Date.now() + '"><\/script>');</script>
-<script src="legacy-parser.js?v=V1117-2"></script>
+<script src="legacy-parser.js?v=V1117-3"></script>
 <script>
 /* ===================== CONFIG ===================== */
 var API = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || "";
@@ -1465,13 +1465,16 @@ var LottoImport = (function () {
   }
 
   /* ตัวอ่านหลัก: ใช้ตัวอ่านของบอทเดิม (legacy-parser.js) ถ้าโหลดได้ ไม่งั้นใช้ตัวอ่านแบบง่าย */
-  function parse(text) {
+  function parse(text, only) {
     if (!window.LegacyParser) return parseSimple(text);
 
-    var r = window.LegacyParser.parse(text, state.lottos);
+    var r = window.LegacyParser.parse(text, state.lottos, { only: only || "" });
     if (!r.ok) {
       var e = new Error(r.error || "อ่านโพยไม่ได้");
       e.isSlip = !!r.isSlip;
+      e.multi = !!r.multi;
+      e.lottos = r.lottos || [];
+      e.needLotto = !!r.needLotto;
       throw e;
     }
     var lotto = state.lottos.filter(function (l) { return l.name === r.lotto; })[0];
@@ -1620,7 +1623,7 @@ var LottoImport = (function () {
       .catch(function () { throw new Error("โหลดรายการหวยไม่สำเร็จ"); })
       .then(function () {
         resetPage();
-        var parsed = parse(String(o.text || ""));
+        var parsed = parse(String(o.text || ""), o.lotto);
         if (isClosed(parsed.lotto)) {
           var ce = new Error(parsed.lotto.name + " ปิดรับแล้ว");
           ce.closed = true; ce.lotto = parsed.lotto.name;
@@ -1693,18 +1696,35 @@ var LottoImport = (function () {
 
   function cancel() { resetPage(); showLottoScreen(); return { ok: true }; }
 
-  /* ตรวจข้อความว่าเป็นโพยไหม (ไม่แตะหน้าเว็บ) → isSlip=false คือไม่มีชื่อหวย */
+  /*
+   * ตรวจข้อความว่าเป็นโพยไหม (ไม่แตะหน้าเว็บ)
+   *   ok + lottos[]   → ลงได้ (หลายหวยได้) แต่ละตัวมี {name, closed}
+   *   needLotto       → มีโพยแต่ไม่มีชื่อหวย (ถามลูกค้า)
+   *   isSlip=false    → ไม่ใช่โพย
+   */
+  function checkOne(text, only) {
+    var p = parse(text, only);
+    return { name: p.lotto.name, closed: isClosed(p.lotto) };
+  }
+
   function check(o) {
     return waitFor(function () { return state.lottos.length; }, 20000)
       .then(function () {
         var text = String((o && o.text) || "");
         try {
-          var p = parse(text);
-          if (isClosed(p.lotto)) return { ok: false, isSlip: true, closed: true, lotto: p.lotto.name, error: p.lotto.name + " ปิดรับแล้ว" };
-          return { ok: true, isSlip: true, lotto: p.lotto.name };
+          var one = checkOne(text);
+          return { ok: true, isSlip: true, lottos: [one], lotto: one.name, closed: one.closed };
         } catch (e) {
+          if (e.multi) {
+            var list = [];
+            for (var i = 0; i < e.lottos.length; i++) {
+              try { list.push(checkOne(text, e.lottos[i])); }
+              catch (e2) { return { ok: false, isSlip: true, error: e.lottos[i] + ": " + e2.message }; }
+            }
+            return { ok: true, isSlip: true, multi: true, lottos: list };
+          }
           var isSlip = typeof e.isSlip === "boolean" ? e.isSlip : !!findLotto(text);
-          return { ok: false, isSlip: isSlip, error: e.message };
+          return { ok: false, isSlip: isSlip, needLotto: !!e.needLotto, error: e.message };
         }
       })
       .catch(function () { return { ok: false, isSlip: false, error: "โหลดรายการหวยไม่สำเร็จ" }; });
