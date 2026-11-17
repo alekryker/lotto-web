@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>หลังบ้าน</title>
+<style>
+:root{--red:#b91c1c;--red-soft:#fef2f2;--line:#e4e4e7;--bg:#f6f6f8;--ink:#18181b;--muted:#71717a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans Thai",sans-serif;font-size:14px}
+button,input,select{font:inherit}
+.wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px}
+header{background:linear-gradient(135deg,#701524,#b41630);color:#fff;padding:14px 16px;border-radius:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+header h1{margin:0;font-size:18px}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
+.btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn.sm{padding:5px 10px;font-size:12px}
+.login{max-width:340px;margin:60px auto;background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;display:grid;gap:10px}
+input,select{padding:9px 11px;border:1.5px solid #d4d4d8;border-radius:10px;background:#fff;width:100%}
+.err{color:#dc2626;font-size:12px;min-height:16px;text-align:center}
+.bar{display:flex;gap:8px;align-items:center;margin:12px 0}
+.bar select{flex:1}
+.grand{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.grand .v{font-size:24px;font-weight:900;color:var(--red);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted);font-size:12px}
+.lotto{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;overflow:hidden}
+.lotto-h{width:100%;border:0;background:#fff;padding:13px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;text-align:left}
+.lotto-h b{font-size:16px}
+.lotto-h .v{font-size:18px;font-weight:900;color:var(--red);font-variant-numeric:tabular-nums;white-space:nowrap}
+.lotto.open .lotto-h{background:var(--red-soft)}
+.slips{display:none;border-top:1px solid var(--line)}
+.lotto.open .slips{display:block}
+.slip{border-bottom:1px solid #f0f0f0}
+.slip:last-child{border:0}
+.slip-h{width:100%;border:0;background:#fff;padding:10px 14px;display:flex;justify-content:space-between;gap:10px;cursor:pointer;text-align:left}
+.slip-h b{font-variant-numeric:tabular-nums}
+.slip-d{display:none;padding:0 14px 12px}
+.slip.open .slip-d{display:grid;gap:6px}
+.slip.open .slip-h{background:#fafafa}
+.item{border:1px solid #fee2e2;border-radius:10px;overflow:hidden}
+.item-h{padding:7px 10px;background:var(--red-soft);display:flex;justify-content:space-between;gap:8px;font-weight:800;color:var(--red);font-size:13px}
+.item-n{padding:8px 10px;font-weight:700;word-break:break-word;font-variant-numeric:tabular-nums;line-height:1.5}
+.empty{padding:30px;text-align:center;color:#a1a1aa;background:#fff;border:1px dashed var(--line);border-radius:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div id="loginView" class="login">
+  <b style="font-size:18px">หลังบ้าน</b>
+  <input id="key" type="password" placeholder="รหัสแอดมิน" autocomplete="current-password">
+  <button class="btn red" id="loginBtn">เข้าสู่ระบบ</button>
+  <div class="err" id="loginErr"></div>
+</div>
+
+<div id="mainView" style="display:none">
+  <header>
+    <h1>ยอดซื้อแต่ละหวย</h1>
+    <div style="display:flex;gap:6px">
+      <button class="btn sm" id="refresh">รีเฟรช</button>
+      <button class="btn sm" id="logout">ออก</button>
+    </div>
+  </header>
+
+  <div class="bar">
+    <span class="muted">งวด</span>
+    <select id="round"></select>
+  </div>
+
+  <div class="grand">
+    <div><b>รวมทุกหวย</b><div class="muted" id="grandMeta"></div></div>
+    <div class="v" id="grandTotal">0 ฿</div>
+  </div>
+
+  <div id="list"></div>
+  <div class="err" id="mainErr"></div>
+</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+var API = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || "";
+var KEY_STORE = "admin_key";
+var S = { key: "", orders: [], openLotto: null, openSlip: null };
+function $(id) { return document.getElementById(id); }
+function fmt(n) { return Number(n || 0).toLocaleString("en-US"); }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+function load() {
+  if (!API) return Promise.reject(new Error("ยังไม่ได้ใส่ API_URL ใน config.js"));
+  return fetch(API, { method: "POST", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "adminOrders", key: S.key }) })
+    .then(function (r) { return r.text(); })
+    .then(function (t) {
+      var d; try { d = JSON.parse(t); } catch (e) { throw new Error("เชื่อมต่อ API ไม่สำเร็จ"); }
+      if (d.ok === false) throw new Error(d.error || "เกิดข้อผิดพลาด");
+      S.orders = d.orders || [];
+      fillRounds();
+      render();
+    });
+}
+
+function login() {
+  S.key = $("key").value.trim();
+  $("loginErr").textContent = "";
+  if (!S.key) return;
+  load().then(function () {
+    try { sessionStorage.setItem(KEY_STORE, S.key); } catch (e) {}
+    $("loginView").style.display = "none";
+    $("mainView").style.display = "block";
+  }).catch(function (e) { $("loginErr").textContent = e.message; });
+}
+
+/* งวด dd-MM-yyyy → เรียงใหม่สุดก่อน */
+function roundKey(d) { var m = String(d).match(/(\d{2})-(\d{2})-(\d{4})/); return m ? m[3] + m[2] + m[1] : String(d); }
+
+function fillRounds() {
+  var cur = $("round").value, set = {};
+  S.orders.forEach(function (o) { set[o.drawDate] = 1; });
+  var rounds = Object.keys(set).sort(function (a, b) { return roundKey(b).localeCompare(roundKey(a)); });
+  $("round").innerHTML = rounds.length ? rounds.map(function (r) { return "<option>" + esc(r) + "</option>"; }).join("") : "<option value=''>ยังไม่มีข้อมูล</option>";
+  if (cur && set[cur]) $("round").value = cur;
+}
+
+function render() {
+  var round = $("round").value;
+  var orders = S.orders.filter(function (o) { return o.drawDate === round; });
+  var byLotto = {}, names = [];
+  orders.forEach(function (o) {
+    if (!byLotto[o.lotto]) { byLotto[o.lotto] = { total: 0, slips: [] }; names.push(o.lotto); }
+    byLotto[o.lotto].total += o.total;
+    byLotto[o.lotto].slips.push(o);
+  });
+  names.sort(function (a, b) { return byLotto[b].total - byLotto[a].total; });
+
+  var grand = orders.reduce(function (s, o) { return s + o.total; }, 0);
+  $("grandTotal").textContent = fmt(grand) + " ฿";
+  $("grandMeta").textContent = names.length + " หวย · " + orders.length + " โพย";
+
+  if (!names.length) { $("list").innerHTML = '<div class="empty">ยังไม่มีโพยในงวดนี้</div>'; return; }
+
+  $("list").innerHTML = names.map(function (n) {
+    var g = byLotto[n];
+    var slips = g.slips.slice().reverse().map(slipHtml).join("");
+    return '<div class="lotto' + (S.openLotto === n ? " open" : "") + '" data-lotto="' + esc(n) + '">' +
+      '<button class="lotto-h" type="button"><div><b>' + esc(n) + '</b><div class="muted">' + g.slips.length + ' โพย</div></div>' +
+      '<div class="v">' + fmt(g.total) + ' ฿</div></button><div class="slips">' + slips + '</div></div>';
+  }).join("");
+}
+
+function slipHtml(o) {
+  var items = (o.items || []).map(function (it) {
+    var price = [it.top ? "บน/ตรง " + it.top : "", it.bottom ? "ล่าง/โต๊ด " + it.bottom : ""].filter(Boolean).join(" · ");
+    return '<div class="item"><div class="item-h"><span>' + esc(it.label) + ' <span class="muted">' + it.count + ' ตัว · ' + esc(price) + '</span></span><span>' + fmt(it.subtotal) + ' ฿</span></div>' +
+      '<div class="item-n">' + esc(it.numbers) + '</div></div>';
+  }).join("");
+  return '<div class="slip' + (S.openSlip === o.ref ? " open" : "") + '" data-ref="' + esc(o.ref) + '">' +
+    '<button class="slip-h" type="button"><div><b>' + esc(o.name || "-") + '</b> <span class="muted">' + esc(o.phone) + '</span>' +
+    '<div class="muted">' + esc(o.time) + ' · ' + esc(o.ref) + '</div></div><b>' + fmt(o.total) + ' ฿</b></button>' +
+    '<div class="slip-d">' + items + '</div></div>';
+}
+
+$("list").addEventListener("click", function (e) {
+  var sh = e.target.closest(".slip-h");
+  if (sh) {
+    var ref = sh.parentNode.dataset.ref;
+    S.openSlip = S.openSlip === ref ? null : ref;
+    sh.parentNode.classList.toggle("open", S.openSlip === ref);
+    return;
+  }
+  var lh = e.target.closest(".lotto-h");
+  if (lh) {
+    var n = lh.parentNode.dataset.lotto;
+    S.openLotto = S.openLotto === n ? null : n;
+    render();
+  }
+});
+
+$("round").addEventListener("change", function () { S.openLotto = null; S.openSlip = null; render(); });
+$("loginBtn").addEventListener("click", login);
+$("key").addEventListener("keydown", function (e) { if (e.key === "Enter") login(); });
+$("refresh").addEventListener("click", function () { $("mainErr").textContent = ""; load().catch(function (e) { $("mainErr").textContent = e.message; }); });
+$("logout").addEventListener("click", function () { try { sessionStorage.removeItem(KEY_STORE); } catch (e) {} location.reload(); });
+
+try { var k = sessionStorage.getItem(KEY_STORE); if (k) { $("key").value = k; login(); } } catch (e) {}
+</script>
+</body>
+</html>
