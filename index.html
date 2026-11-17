@@ -1557,7 +1557,24 @@ var LottoImport = (function () {
 
   function cancel() { resetPage(); showLottoScreen(); return { ok: true }; }
 
-  return { parse: parse, fill: fill, endCapture: endCapture, submit: submit, cancel: cancel };
+  /* ตรวจข้อความว่าเป็นโพยไหม (ไม่แตะหน้าเว็บ) → isSlip=false คือไม่มีชื่อหวย */
+  function check(o) {
+    return waitFor(function () { return state.lottos.length; }, 20000)
+      .then(function () {
+        var text = String((o && o.text) || "");
+        if (!findLotto(text)) return { ok: false, isSlip: false, error: "ไม่พบชื่อหวย" };
+        try {
+          var p = parse(text);
+          if (isClosed(p.lotto)) return { ok: false, isSlip: true, error: p.lotto.name + " ปิดรับแล้ว" };
+          return { ok: true, isSlip: true, lotto: p.lotto.name };
+        } catch (e) {
+          return { ok: false, isSlip: true, error: e.message };
+        }
+      })
+      .catch(function () { return { ok: false, isSlip: false, error: "โหลดรายการหวยไม่สำเร็จ" }; });
+  }
+
+  return { parse: parse, check: check, fill: fill, endCapture: endCapture, submit: submit, cancel: cancel };
 })();
 window.LottoImport = LottoImport;
 </script>
