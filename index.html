@@ -1500,7 +1500,11 @@ var LottoImport = (function () {
       .then(function () {
         resetPage();
         var parsed = parse(String(o.text || ""));
-        if (isClosed(parsed.lotto)) throw new Error(parsed.lotto.name + " ปิดรับแล้ว");
+        if (isClosed(parsed.lotto)) {
+          var ce = new Error(parsed.lotto.name + " ปิดรับแล้ว");
+          ce.closed = true; ce.lotto = parsed.lotto.name;
+          throw ce;
+        }
         chooseLotto(parsed.lotto);
         parsed.bills.forEach(addParsedBill);
         openConfirm();
@@ -1525,7 +1529,7 @@ var LottoImport = (function () {
       .catch(function (e) {
         resetPage();
         showLottoScreen();
-        return { ok: false, error: e.message || String(e) };
+        return { ok: false, error: e.message || String(e), closed: !!e.closed, lotto: e.lotto || "" };
       });
   }
 
@@ -1565,7 +1569,7 @@ var LottoImport = (function () {
         if (!findLotto(text)) return { ok: false, isSlip: false, error: "ไม่พบชื่อหวย" };
         try {
           var p = parse(text);
-          if (isClosed(p.lotto)) return { ok: false, isSlip: true, error: p.lotto.name + " ปิดรับแล้ว" };
+          if (isClosed(p.lotto)) return { ok: false, isSlip: true, closed: true, lotto: p.lotto.name, error: p.lotto.name + " ปิดรับแล้ว" };
           return { ok: true, isSlip: true, lotto: p.lotto.name };
         } catch (e) {
           return { ok: false, isSlip: true, error: e.message };
