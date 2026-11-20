@@ -19,7 +19,12 @@ var AFTER_MIDNIGHT_CUTOFF_HOUR = 6;
 var SH_LOTTO = 'หวย';
 var SH_SETTINGS = 'ตั้งค่า';
 var SH_ORDERS = 'โพย';
-var ORDER_HEADERS = ['เวลา', 'เลขที่โพย', 'ชื่อ', 'เบอร์', 'หวย', 'งวด', 'ยอดรวม', 'รายการ'];
+var SH_RESULTS = 'ผลหวย';
+var ORDER_HEADERS = ['เวลา', 'เลขที่โพย', 'ชื่อ', 'เบอร์', 'หวย', 'งวด', 'ยอดรวม', 'รายการ', 'สถานะ'];
+var RESULT_HEADERS = ['หวย', 'งวด', '3 ตัวบน', '2 ตัวล่าง', 'แก้เมื่อ'];
+var RESULTS_API = 'https://livehuay.netlify.app/api/results-all';
+// อัตราจ่าย (บาทละ) — แก้ได้ในชีต "ตั้งค่า" โดยเพิ่มแถว เช่น "จ่าย 3 ตัวตรง | 800"
+var DEFAULT_RATES = { three_top: 800, three_tod: 125, two_top: 100, two_bottom: 100 };
 
 /* ===================== SETUP ===================== */
 function setup() {
@@ -80,7 +85,19 @@ function doPost(e) {
     if (body.action === 'createOrder') return json_(createOrder_(body));
     if (body.action === 'adminOrders') {
       requireAdmin_(body.key);
-      return json_({ ok: true, orders: listOrders_() });
+      return json_({ ok: true, orders: listOrders_(), lottos: readLottos_().map(function (l) { return l.name; }), rates: rates_() });
+    }
+    if (body.action === 'adminCancel') {
+      requireAdmin_(body.key);
+      return json_(setOrderStatus_(body.ref, body.undo ? '' : 'ยกเลิก'));
+    }
+    if (body.action === 'adminResults') {
+      requireAdmin_(body.key);
+      return json_({ ok: true, results: results_(body.dates || [], body.names || []), rates: rates_() });
+    }
+    if (body.action === 'adminSetResult') {
+      requireAdmin_(body.key);
+      return json_(setResult_(body.lotto, body.drawDate, body.top, body.bottom));
     }
     return json_({ ok: false, error: 'ไม่รู้จัก action' });
   } catch (err) {
@@ -93,14 +110,16 @@ function readLottos_() {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_LOTTO);
   if (!sh || sh.getLastRow() < 2) return [];
   // คอลัมน์ D (ไม่บังคับ) = ชื่อเรียกอื่น คั่นด้วยช่องว่าง เช่น "ลาวex เอ็กตร้า"
-  var cols = Math.max(3, Math.min(4, sh.getLastColumn()));
+  // คอลัมน์ E (ไม่บังคับ) = ชื่อหวยในเว็บผลหวย ถ้าชื่อไม่ตรงกัน เช่น "หุ้นเกาหลี"
+  var cols = Math.max(3, Math.min(5, sh.getLastColumn()));
   return sh.getRange(2, 1, sh.getLastRow() - 1, cols).getValues()
     .map(function (r) {
       return {
         name: String(r[0]).trim(),
         closeTime: normTime_(r[1]),
         open: r[2] === true || String(r[2]).toUpperCase() === 'TRUE',
-        aliases: String(r[3] || '').trim().split(/\s+/).filter(Boolean)
+        aliases: String(r[3] || '').trim().split(/\s+/).filter(Boolean),
+        resultName: String(r[4] || '').trim()
       };
     })
     .filter(function (l) { return l.name && l.closeTime; });
@@ -208,15 +227,182 @@ function listOrders_() {
   var last = sh.getLastRow();
   if (last < 2) return [];
   var start = Math.max(2, last - 4999);
-  return sh.getRange(start, 1, last - start + 1, ORDER_HEADERS.length).getValues().map(function (r) {
+  var cols = Math.min(ORDER_HEADERS.length, Math.max(8, sh.getLastColumn()));
+  return sh.getRange(start, 1, last - start + 1, cols).getValues().map(function (r) {
     var items = [];
     try { items = JSON.parse(r[7] || '[]'); } catch (e) {}
     return {
       time: r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd HH:mm:ss') : String(r[0]),
       ref: String(r[1]), name: String(r[2]), phone: String(r[3]),
-      lotto: String(r[4]), drawDate: String(r[5]), total: Number(r[6]) || 0, items: items
+      lotto: String(r[4]), drawDate: String(r[5]), total: Number(r[6]) || 0, items: items,
+      cancelled: String(r[8] || '') === 'ยกเลิก'
     };
   });
+}
+
+/** ยกเลิกโพย (status = 'ยกเลิก') หรือคืนสถานะ (status = '') */
+function setOrderStatus_(ref, status) {
+  ref = String(ref || '').trim();
+  if (!ref) throw new Error('ไม่มีเลขที่โพย');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_ORDERS);
+    if (sh.getLastColumn() < 9 || !sh.getRange(1, 9).getValue()) sh.getRange(1, 9).setValue('สถานะ');
+    var last = sh.getLastRow();
+    if (last < 2) throw new Error('ไม่พบโพย');
+    var refs = sh.getRange(2, 2, last - 1, 1).getValues();
+    for (var i = refs.length - 1; i >= 0; i--) {
+      if (String(refs[i][0]) === ref) {
+        sh.getRange(i + 2, 9).setValue(status);
+        return { ok: true, ref: ref, cancelled: status === 'ยกเลิก' };
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  throw new Error('ไม่พบโพย ' + ref);
+}
+
+/* ===================== RESULTS ===================== */
+function rates_() {
+  var r = {};
+  for (var k in DEFAULT_RATES) r[k] = DEFAULT_RATES[k];
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_SETTINGS);
+  if (!sh || sh.getLastRow() < 2) return r;
+  var labels = { 'จ่าย 3 ตัวตรง': 'three_top', 'จ่าย 3 ตัวโต๊ด': 'three_tod', 'จ่าย 2 ตัวบน': 'two_top', 'จ่าย 2 ตัวล่าง': 'two_bottom' };
+  sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (row) {
+    var k = labels[String(row[0]).trim()], v = Number(row[1]);
+    if (k && v > 0) r[k] = v;
+  });
+  return r;
+}
+
+/** ชื่อหวยแบบเทียบได้: ตัดธง/ช่องว่าง/คำว่า หุ้น หวย ปกติ, ทีวี=tv */
+function normName_(s) {
+  return String(s || '').toLowerCase()
+    .replace(/[^\u0E00-\u0E7Fa-z0-9]/g, '')
+    .replace(/หุ้น|หวย|ปกติ/g, '')
+    .replace(/ทีวี/g, 'tv')
+    .replace(/extar/g, 'extra');
+}
+
+/** dd-MM-yyyy → yyyy-MM-dd */
+function isoDate_(d) {
+  var m = String(d).match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+}
+
+/** ผลจาก API ของหลายวัน (แคช: วันนี้/เมื่อวาน 2 นาที, เก่ากว่านั้น 6 ชม.) → { iso: [results] } */
+function apiResults_(isos) {
+  var cache = CacheService.getScriptCache(), out = {}, need = [];
+  var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  var yest = Utilities.formatDate(new Date(Date.now() - 864e5), TZ, 'yyyy-MM-dd');
+  isos.forEach(function (iso) {
+    var c = cache.get('res_' + iso);
+    if (c) out[iso] = JSON.parse(c); else need.push(iso);
+  });
+  if (need.length) {
+    var resps = UrlFetchApp.fetchAll(need.map(function (iso) {
+      return { url: RESULTS_API + '?date=' + iso, muteHttpExceptions: true };
+    }));
+    resps.forEach(function (r, i) {
+      var iso = need[i], list = [];
+      try {
+        var d = JSON.parse(r.getContentText());
+        if (d.ok && d.date === iso) list = (d.results || []).filter(function (x) { return x.top && x.bottom; })
+          .map(function (x) { return { name: x.name, top: String(x.top), bottom: String(x.bottom) }; });
+      } catch (e) {}
+      out[iso] = list;
+      try { cache.put('res_' + iso, JSON.stringify(list), (iso === today || iso === yest) ? 120 : 21600); } catch (e) {}
+    });
+  }
+  return out;
+}
+
+/** ผลหวยที่แก้เอง → { 'lotto|dd-MM-yyyy': {top, bottom, row} } */
+function manualResults_() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_RESULTS), map = {};
+  if (!sh || sh.getLastRow() < 2) return map;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().forEach(function (r, i) {
+    var top = String(r[2]).replace(/\D/g, ''), bottom = String(r[3]).replace(/\D/g, '');
+    if (top) top = ('000' + top).slice(-3);         // กันเลขศูนย์นำหน้าหายถ้าชีตแปลงเป็นตัวเลข
+    if (bottom) bottom = ('00' + bottom).slice(-2);
+    var d = r[1] instanceof Date ? Utilities.formatDate(r[1], TZ, 'dd-MM-yyyy') : String(r[1]).trim();
+    if (r[0] && d) map[String(r[0]).trim() + '|' + d] = { top: top, bottom: bottom, row: i + 2 };
+  });
+  return map;
+}
+
+/**
+ * ผลหวยของแต่ละงวด/หวย: แก้เอง (ชีต "ผลหวย") มาก่อน ไม่มีค่อยใช้ API
+ * คืน { 'dd-MM-yyyy': { 'ชื่อหวย': {top, bottom, source:'manual'|'api', apiName} } }
+ */
+function results_(dates, names) {
+  dates = dates.filter(function (d) { return isoDate_(d); }).slice(0, 70);
+  var lottos = readLottos_(), byName = {};
+  lottos.forEach(function (l) { byName[l.name] = l; });
+  var all = {};
+  lottos.forEach(function (l) { all[l.name] = 1; });
+  names.forEach(function (n) { if (n) all[String(n)] = 1; });
+  names = Object.keys(all);
+
+  var api = apiResults_(dates.map(isoDate_));
+  var manual = manualResults_();
+  var out = {};
+  dates.forEach(function (d) {
+    var list = api[isoDate_(d)] || [], idx = {};
+    list.forEach(function (x) { var k = normName_(x.name); if (!idx[k]) idx[k] = x; });
+    var day = {};
+    names.forEach(function (n) {
+      var m = manual[n + '|' + d];
+      if (m && m.top && m.bottom) { day[n] = { top: m.top, bottom: m.bottom, source: 'manual' }; return; }
+      var l = byName[n] || { name: n, aliases: [], resultName: '' };
+      var keys = [l.resultName, l.name].concat(l.aliases).filter(Boolean).map(normName_);
+      for (var i = 0; i < keys.length; i++) {
+        var x = idx[keys[i]];
+        if (x) { day[n] = { top: x.top, bottom: x.bottom, source: 'api', apiName: x.name }; return; }
+      }
+    });
+    out[d] = day;
+  });
+  return out;
+}
+
+/** เพิ่ม/แก้ผลหวยเอง — ว่างทั้งคู่ = ลบ (กลับไปใช้ผลจาก API) */
+function setResult_(lotto, drawDate, top, bottom) {
+  lotto = String(lotto || '').trim();
+  drawDate = String(drawDate || '').trim();
+  top = String(top || '').replace(/\D/g, '');
+  bottom = String(bottom || '').replace(/\D/g, '');
+  if (!lotto) throw new Error('ไม่มีชื่อหวย');
+  if (!isoDate_(drawDate)) throw new Error('งวดไม่ถูกต้อง');
+  var clear = !top && !bottom;
+  if (!clear && (top.length !== 3 || bottom.length !== 2)) throw new Error('ผลต้องเป็น 3 ตัวบน และ 2 ตัวล่าง');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(SH_RESULTS);
+    if (!sh) {
+      sh = ss.insertSheet(SH_RESULTS);
+      sh.appendRow(RESULT_HEADERS);
+      sh.getRange('A:D').setNumberFormat('@');
+      sh.setFrozenRows(1);
+    }
+    var m = manualResults_()[lotto + '|' + drawDate];
+    if (clear) {
+      if (m) sh.deleteRow(m.row);
+      return { ok: true, cleared: true };
+    }
+    var row = [lotto, drawDate, top, bottom, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss')];
+    if (m) sh.getRange(m.row, 1, 1, 5).setValues([row]);
+    else sh.appendRow(row);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* ===================== UTIL ===================== */

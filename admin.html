@@ -5,43 +5,99 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>หลังบ้าน</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--red:#b91c1c;--red-soft:#fef2f2;--line:#e4e4e7;--bg:#f6f6f8;--ink:#18181b;--muted:#71717a}
+:root{--red:#b91c1c;--red-soft:#fef2f2;--green:#15803d;--green-soft:#f0fdf4;--line:#e4e4e7;--bg:#f6f6f8;--ink:#18181b;--muted:#71717a;--amber:#b45309;--amber-soft:#fffbeb}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans Thai",sans-serif;font-size:14px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Anuphan",system-ui,-apple-system,"Noto Sans Thai",sans-serif;font-size:14px}
 button,input,select{font:inherit}
-.wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px}
+.wrap{max-width:980px;margin:0 auto;padding:14px 14px 40px}
 header{background:linear-gradient(135deg,#701524,#b41630);color:#fff;padding:14px 16px;border-radius:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
 header h1{margin:0;font-size:18px}
-.btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer}
 .btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff}
 .btn.sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
 .login{max-width:340px;margin:60px auto;background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;display:grid;gap:10px}
 input,select{padding:9px 11px;border:1.5px solid #d4d4d8;border-radius:10px;background:#fff;width:100%}
 .err{color:#dc2626;font-size:12px;min-height:16px;text-align:center}
-.bar{display:flex;gap:8px;align-items:center;margin:12px 0}
-.bar select{flex:1}
-.grand{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.grand .v{font-size:24px;font-weight:900;color:var(--red);font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:6px;margin:12px 0;overflow-x:auto}
+.tab{flex:1;min-width:max-content;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;color:var(--muted)}
+.tab.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.bar{display:flex;gap:8px;align-items:center;margin:12px 0;flex-wrap:wrap}
+.bar select,.bar input{flex:1;min-width:140px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.grand{display:flex;justify-content:space-between;align-items:center}
+.grand .v,.stat .v{font-size:24px;font-weight:700;color:var(--red);font-variant-numeric:tabular-nums}
 .muted{color:var(--muted);font-size:12px}
 .lotto{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;overflow:hidden}
 .lotto-h{width:100%;border:0;background:#fff;padding:13px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;text-align:left}
 .lotto-h b{font-size:16px}
-.lotto-h .v{font-size:18px;font-weight:900;color:var(--red);font-variant-numeric:tabular-nums;white-space:nowrap}
+.lotto-h .v{font-size:18px;font-weight:700;color:var(--red);font-variant-numeric:tabular-nums;white-space:nowrap}
 .lotto.open .lotto-h{background:var(--red-soft)}
 .slips{display:none;border-top:1px solid var(--line)}
 .lotto.open .slips{display:block}
 .slip{border-bottom:1px solid #f0f0f0}
 .slip:last-child{border:0}
+.slip.cancel .slip-h{opacity:.55}
+.slip.cancel .slip-h .amt{text-decoration:line-through}
 .slip-h{width:100%;border:0;background:#fff;padding:10px 14px;display:flex;justify-content:space-between;gap:10px;cursor:pointer;text-align:left}
 .slip-h b{font-variant-numeric:tabular-nums}
 .slip-d{display:none;padding:0 14px 12px}
 .slip.open .slip-d{display:grid;gap:6px}
 .slip.open .slip-h{background:#fafafa}
 .item{border:1px solid #fee2e2;border-radius:10px;overflow:hidden}
-.item-h{padding:7px 10px;background:var(--red-soft);display:flex;justify-content:space-between;gap:8px;font-weight:800;color:var(--red);font-size:13px}
-.item-n{padding:8px 10px;font-weight:700;word-break:break-word;font-variant-numeric:tabular-nums;line-height:1.5}
+.item-h{padding:7px 10px;background:var(--red-soft);display:flex;justify-content:space-between;gap:8px;font-weight:700;color:var(--red);font-size:13px}
+.item-n{padding:8px 10px;font-weight:600;word-break:break-word;font-variant-numeric:tabular-nums;line-height:1.5}
+.slip-act{display:flex;justify-content:flex-end;gap:6px}
+.pill{display:inline-block;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}
+.pill.x{background:#f4f4f5;color:#52525b}
+.pill.api{background:#eff6ff;color:#1d4ed8}
+.pill.man{background:var(--amber-soft);color:var(--amber)}
+.pill.wait{background:#f4f4f5;color:#a1a1aa}
+.pill.win{background:var(--green-soft);color:var(--green)}
 .empty{padding:30px;text-align:center;color:#a1a1aa;background:#fff;border:1px dashed var(--line);border-radius:14px}
+/* ผลหวย */
+.res-row{display:grid;grid-template-columns:1fr 84px 70px auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #f0f0f0}
+.res-row:last-child{border:0}
+.res-row input{text-align:center;font-weight:700;letter-spacing:2px;padding:7px 6px;font-variant-numeric:tabular-nums}
+.res-row .acts{display:flex;gap:4px}
+.res-head{display:grid;grid-template-columns:1fr 84px 70px auto;gap:8px;padding:0 0 6px;border-bottom:1px solid var(--line)}
+/* สรุป */
+.filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:16px}
+.radios{display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:10px}
+.radios label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.radios input{width:auto}
+.range{display:flex;gap:6px;align-items:center}
+.chips-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:260px;overflow:auto}
+.chip{border:1px solid #bbf7d0;background:var(--green-soft);color:#166534;border-radius:99px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;display:flex;gap:5px;align-items:center}
+.chip:not(.on){border-color:var(--line);background:#fff;color:#a1a1aa}
+.chip i{font-style:normal;width:14px;height:14px;border-radius:4px;background:var(--green);color:#fff;font-size:10px;display:grid;place-items:center}
+.chip:not(.on) i{background:#e4e4e7;color:transparent}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+.stat .v{font-size:20px}
+.stat .v.pos{color:var(--green)}
+.stat .v.neg{color:var(--red)}
+.stat .v.gray{color:#52525b}
+h3{margin:4px 0 10px;font-size:15px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:8px 6px;border-bottom:1px solid #f0f0f0;text-align:right;white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:600}
+th:first-child,td:first-child{text-align:left}
+td.l{text-align:left}
+.tw{overflow-x:auto}
+.pos{color:var(--green);font-weight:700}
+.neg{color:var(--red);font-weight:700}
+@media (max-width:720px){
+  .filters{grid-template-columns:1fr}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .res-row,.res-head{grid-template-columns:1fr 70px 58px auto}
+}
 </style>
 </head>
 <body>
@@ -56,24 +112,87 @@ input,select{padding:9px 11px;border:1.5px solid #d4d4d8;border-radius:10px;back
 
 <div id="mainView" style="display:none">
   <header>
-    <h1>ยอดซื้อแต่ละหวย</h1>
+    <h1>หลังบ้านหวย</h1>
     <div style="display:flex;gap:6px">
       <button class="btn sm" id="refresh">รีเฟรช</button>
       <button class="btn sm" id="logout">ออก</button>
     </div>
   </header>
 
-  <div class="bar">
-    <span class="muted">งวด</span>
-    <select id="round"></select>
+  <div class="tabs">
+    <button class="tab on" data-tab="orders">ยอดซื้อ</button>
+    <button class="tab" data-tab="results">ผลหวย</button>
+    <button class="tab" data-tab="summary">สรุปแพ้-ชนะ</button>
   </div>
 
-  <div class="grand">
-    <div><b>รวมทุกหวย</b><div class="muted" id="grandMeta"></div></div>
-    <div class="v" id="grandTotal">0 ฿</div>
-  </div>
+  <!-- ยอดซื้อ -->
+  <section id="tab-orders">
+    <div class="bar">
+      <span class="muted">งวด</span>
+      <select id="round"></select>
+    </div>
+    <div class="card grand">
+      <div><b>รวมทุกหวย</b><div class="muted" id="grandMeta"></div></div>
+      <div class="v" id="grandTotal">0 ฿</div>
+    </div>
+    <div id="list"></div>
+  </section>
 
-  <div id="list"></div>
+  <!-- ผลหวย -->
+  <section id="tab-results" style="display:none">
+    <div class="bar">
+      <span class="muted">งวดวันที่</span>
+      <input type="date" id="resDate">
+      <button class="btn sm" id="resReload">โหลดผล</button>
+    </div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:8px">ผลดึงจาก API อัตโนมัติ (ป้าย <span class="pill api">API</span>) · แก้หรือใส่เองได้ (ป้าย <span class="pill man">แก้เอง</span>) · กด "ล้าง" เพื่อกลับไปใช้ผลจาก API</div>
+      <div class="res-head muted"><span>หวย</span><span style="text-align:center">3 ตัวบน</span><span style="text-align:center">2 ล่าง</span><span></span></div>
+      <div id="resList"></div>
+      <div class="res-row" style="margin-top:6px">
+        <input id="addName" placeholder="+ เพิ่มหวยอื่น (พิมพ์ชื่อ)" style="text-align:left;letter-spacing:0;font-weight:500">
+        <input id="addTop" inputmode="numeric" maxlength="3" placeholder="000">
+        <input id="addBottom" inputmode="numeric" maxlength="2" placeholder="00">
+        <div class="acts"><button class="btn sm green" id="addBtn">เพิ่ม</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- สรุปแพ้-ชนะ -->
+  <section id="tab-summary" style="display:none">
+    <div class="card">
+      <div class="filters">
+        <div>
+          <div class="radios" id="period">
+            <label><input type="radio" name="p" value="today" checked>วันนี้</label>
+            <label><input type="radio" name="p" value="yesterday">เมื่อวาน</label>
+            <label><input type="radio" name="p" value="week">สัปดาห์นี้</label>
+            <label><input type="radio" name="p" value="lastweek">สัปดาห์ที่แล้ว</label>
+            <label><input type="radio" name="p" value="month">เดือนนี้</label>
+            <label><input type="radio" name="p" value="lastmonth">เดือนที่แล้ว</label>
+            <label><input type="radio" name="p" value="custom">เลือกวันที่</label>
+          </div>
+          <div class="range">
+            <input type="date" id="from"><span class="muted">ถึง</span><input type="date" id="to">
+          </div>
+          <div class="muted" style="margin-top:6px">ดูได้สูงสุดครั้งละ 62 วัน · อัตราจ่าย <span id="rateText"></span></div>
+        </div>
+        <div>
+          <div class="chips-h">
+            <b>เลือกหวย <span class="muted" id="chipCount"></span></b>
+            <div style="display:flex;gap:4px">
+              <button class="btn sm" id="chipAll">เลือกทั้งหมด</button>
+              <button class="btn sm" id="chipNone">เอาออกทั้งหมด</button>
+            </div>
+          </div>
+          <div class="chips" id="chips"></div>
+        </div>
+      </div>
+      <div style="margin-top:12px"><button class="btn green" id="search">ค้นหา</button></div>
+    </div>
+    <div id="sumOut"></div>
+  </section>
+
   <div class="err" id="mainErr"></div>
 </div>
 </div>
@@ -82,22 +201,35 @@ input,select{padding:9px 11px;border:1.5px solid #d4d4d8;border-radius:10px;back
 <script>
 var API = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || "";
 var KEY_STORE = "admin_key";
-var S = { key: "", orders: [], openLotto: null, openSlip: null };
+var S = { key: "", orders: [], lottos: [], rates: null, openLotto: null, openSlip: null, chipsOff: {}, res: {} };
+var RATE_DEFAULT = { three_top: 800, three_tod: 125, two_top: 100, two_bottom: 100 };
 function $(id) { return document.getElementById(id); }
 function fmt(n) { return Number(n || 0).toLocaleString("en-US"); }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function err(e) { $("mainErr").textContent = e ? (e.message || e) : ""; }
 
-function load() {
+function post(body) {
   if (!API) return Promise.reject(new Error("ยังไม่ได้ใส่ API_URL ใน config.js"));
-  return fetch(API, { method: "POST", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "adminOrders", key: S.key }) })
+  body.key = S.key;
+  return fetch(API, { method: "POST", headers: { "content-type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) })
     .then(function (r) { return r.text(); })
     .then(function (t) {
       var d; try { d = JSON.parse(t); } catch (e) { throw new Error("เชื่อมต่อ API ไม่สำเร็จ"); }
       if (d.ok === false) throw new Error(d.error || "เกิดข้อผิดพลาด");
-      S.orders = d.orders || [];
-      fillRounds();
-      render();
+      return d;
     });
+}
+
+function load() {
+  return post({ action: "adminOrders" }).then(function (d) {
+    S.orders = d.orders || [];
+    S.lottos = d.lottos || [];
+    if (d.rates) S.rates = d.rates;
+    fillRounds();
+    render();
+    renderChips();
+    renderRates();
+  });
 }
 
 function login() {
@@ -111,9 +243,66 @@ function login() {
   }).catch(function (e) { $("loginErr").textContent = e.message; });
 }
 
-/* งวด dd-MM-yyyy → เรียงใหม่สุดก่อน */
-function roundKey(d) { var m = String(d).match(/(\d{2})-(\d{2})-(\d{4})/); return m ? m[3] + m[2] + m[1] : String(d); }
+/* ===================== วันที่ (เวลาไทย) ===================== */
+function todayIso() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date()); }
+function addDays(iso, n) { var d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function isoToRound(iso) { var p = iso.split("-"); return p[2] + "-" + p[1] + "-" + p[0]; }
+function roundToIso(r) { var m = String(r).match(/(\d{2})-(\d{2})-(\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; }
+function roundKey(d) { return roundToIso(d) || String(d); }
+function thDate(iso) {
+  return new Date(iso + "T12:00:00Z").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" });
+}
+function periodRange(p) {
+  var t = todayIso(), d = new Date(t + "T00:00:00Z"), dow = (d.getUTCDay() + 6) % 7; // จันทร์ = 0
+  if (p === "today") return [t, t];
+  if (p === "yesterday") return [addDays(t, -1), addDays(t, -1)];
+  if (p === "week") return [addDays(t, -dow), t];
+  if (p === "lastweek") return [addDays(t, -dow - 7), addDays(t, -dow - 1)];
+  var y = d.getUTCFullYear(), m = d.getUTCMonth();
+  if (p === "month") return [new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10), t];
+  if (p === "lastmonth") return [new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10), new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)];
+  return [$("from").value || t, $("to").value || t];
+}
 
+/* ===================== คิดเงินถูกรางวัล ===================== */
+function rates() { return S.rates || RATE_DEFAULT; }
+function sortDigits(s) { return String(s).split("").sort().join(""); }
+var KIND = { two_top: "2 ตัวบน", two_bottom: "2 ตัวล่าง", three_top: "3 ตัวตรง", three_return: "3 ตัวตรง", three_tod: "3 ตัวโต๊ด" };
+/** คืน [{num, kind, bet, pay}] ของรายการที่ถูก */
+function hitsOf(order, res) {
+  var R = rates(), hits = [];
+  if (!res || !res.top || !res.bottom) return hits;
+  var top3 = res.top, top2 = res.top.slice(-2), bot2 = res.bottom, todKey = sortDigits(top3);
+  (order.items || []).forEach(function (it) {
+    var bet = (Number(it.top) || 0) + (Number(it.bottom) || 0);
+    String(it.numbers || "").split(/\s+/).filter(Boolean).forEach(function (n) {
+      var rate = 0;
+      if (it.modeKey === "two_top" && n === top2) rate = R.two_top;
+      else if (it.modeKey === "two_bottom" && n === bot2) rate = R.two_bottom;
+      else if ((it.modeKey === "three_top" || it.modeKey === "three_return") && n === top3) rate = R.three_top;
+      else if (it.modeKey === "three_tod" && n.length === 3 && sortDigits(n) === todKey) rate = R.three_tod;
+      if (rate) hits.push({ num: n, kind: KIND[it.modeKey] || it.label, bet: bet, pay: bet * rate });
+    });
+  });
+  return hits;
+}
+function renderRates() {
+  var R = rates();
+  $("rateText").textContent = "3 ตรง " + R.three_top + " · 3 โต๊ด " + R.three_tod + " · 2 บน " + R.two_top + " · 2 ล่าง " + R.two_bottom;
+}
+
+/* ===================== แท็บ ===================== */
+var TAB = "orders";
+document.querySelector(".tabs").addEventListener("click", function (e) {
+  var b = e.target.closest(".tab"); if (!b) return;
+  TAB = b.dataset.tab;
+  document.querySelectorAll(".tab").forEach(function (x) { x.classList.toggle("on", x === b); });
+  ["orders", "results", "summary"].forEach(function (t) { $("tab-" + t).style.display = t === TAB ? "" : "none"; });
+  err();
+  if (TAB === "results") loadResults();
+});
+
+/* ===================== ยอดซื้อ ===================== */
 function fillRounds() {
   var cur = $("round").value, set = {};
   S.orders.forEach(function (o) { set[o.drawDate] = 1; });
@@ -125,17 +314,20 @@ function fillRounds() {
 function render() {
   var round = $("round").value;
   var orders = S.orders.filter(function (o) { return o.drawDate === round; });
-  var byLotto = {}, names = [];
+  var byLotto = {}, names = [], live = 0, cancelled = 0;
   orders.forEach(function (o) {
-    if (!byLotto[o.lotto]) { byLotto[o.lotto] = { total: 0, slips: [] }; names.push(o.lotto); }
-    byLotto[o.lotto].total += o.total;
+    if (!byLotto[o.lotto]) { byLotto[o.lotto] = { total: 0, slips: [], live: 0 }; names.push(o.lotto); }
     byLotto[o.lotto].slips.push(o);
+    if (o.cancelled) { cancelled++; return; }
+    byLotto[o.lotto].total += o.total;
+    byLotto[o.lotto].live++;
+    live++;
   });
   names.sort(function (a, b) { return byLotto[b].total - byLotto[a].total; });
 
-  var grand = orders.reduce(function (s, o) { return s + o.total; }, 0);
+  var grand = names.reduce(function (s, n) { return s + byLotto[n].total; }, 0);
   $("grandTotal").textContent = fmt(grand) + " ฿";
-  $("grandMeta").textContent = names.length + " หวย · " + orders.length + " โพย";
+  $("grandMeta").textContent = names.length + " หวย · " + live + " โพย" + (cancelled ? " · ยกเลิก " + cancelled : "");
 
   if (!names.length) { $("list").innerHTML = '<div class="empty">ยังไม่มีโพยในงวดนี้</div>'; return; }
 
@@ -143,7 +335,7 @@ function render() {
     var g = byLotto[n];
     var slips = g.slips.slice().reverse().map(slipHtml).join("");
     return '<div class="lotto' + (S.openLotto === n ? " open" : "") + '" data-lotto="' + esc(n) + '">' +
-      '<button class="lotto-h" type="button"><div><b>' + esc(n) + '</b><div class="muted">' + g.slips.length + ' โพย</div></div>' +
+      '<button class="lotto-h" type="button"><div><b>' + esc(n) + '</b><div class="muted">' + g.live + ' โพย</div></div>' +
       '<div class="v">' + fmt(g.total) + ' ฿</div></button><div class="slips">' + slips + '</div></div>';
   }).join("");
 }
@@ -154,18 +346,32 @@ function slipHtml(o) {
     return '<div class="item"><div class="item-h"><span>' + esc(it.label) + ' <span class="muted">' + it.count + ' ตัว · ' + esc(price) + '</span></span><span>' + fmt(it.subtotal) + ' ฿</span></div>' +
       '<div class="item-n">' + esc(it.numbers) + '</div></div>';
   }).join("");
-  return '<div class="slip' + (S.openSlip === o.ref ? " open" : "") + '" data-ref="' + esc(o.ref) + '">' +
-    '<button class="slip-h" type="button"><div><b>' + esc(o.name || "-") + '</b> <span class="muted">' + esc(o.phone) + '</span>' +
-    '<div class="muted">' + esc(o.time) + ' · ' + esc(o.ref) + '</div></div><b>' + fmt(o.total) + ' ฿</b></button>' +
-    '<div class="slip-d">' + items + '</div></div>';
+  var act = o.cancelled
+    ? '<button class="btn sm" data-undo="' + esc(o.ref) + '">คืนสถานะโพย</button>'
+    : '<button class="btn sm red" data-cancel="' + esc(o.ref) + '">ยกเลิกโพยนี้</button>';
+  return '<div class="slip' + (S.openSlip === o.ref ? " open" : "") + (o.cancelled ? " cancel" : "") + '" data-ref="' + esc(o.ref) + '">' +
+    '<button class="slip-h" type="button"><div><b>' + esc(o.name || "-") + '</b> ' + (o.cancelled ? '<span class="pill x">ยกเลิกแล้ว</span>' : '') +
+    '<div class="muted">' + esc(o.time) + ' · ' + esc(o.ref) + '</div></div><b class="amt">' + fmt(o.total) + ' ฿</b></button>' +
+    '<div class="slip-d">' + items + '<div class="slip-act">' + act + '</div></div></div>';
 }
 
 $("list").addEventListener("click", function (e) {
+  var c = e.target.closest("[data-cancel],[data-undo]");
+  if (c) {
+    var ref = c.dataset.cancel || c.dataset.undo, undo = !!c.dataset.undo;
+    if (!undo && !confirm("ยกเลิกโพย " + ref + " ?\nยอดโพยนี้จะไม่ถูกนับในยอดซื้อและสรุปแพ้-ชนะ")) return;
+    c.disabled = true; err();
+    post({ action: "adminCancel", ref: ref, undo: undo }).then(function () {
+      S.orders.forEach(function (o) { if (o.ref === ref) o.cancelled = !undo; });
+      render();
+    }).catch(function (e) { c.disabled = false; err(e); });
+    return;
+  }
   var sh = e.target.closest(".slip-h");
   if (sh) {
-    var ref = sh.parentNode.dataset.ref;
-    S.openSlip = S.openSlip === ref ? null : ref;
-    sh.parentNode.classList.toggle("open", S.openSlip === ref);
+    var r = sh.parentNode.dataset.ref;
+    S.openSlip = S.openSlip === r ? null : r;
+    sh.parentNode.classList.toggle("open", S.openSlip === r);
     return;
   }
   var lh = e.target.closest(".lotto-h");
@@ -175,13 +381,195 @@ $("list").addEventListener("click", function (e) {
     render();
   }
 });
-
 $("round").addEventListener("change", function () { S.openLotto = null; S.openSlip = null; render(); });
+
+/* ===================== ผลหวย ===================== */
+function allNames() {
+  var set = {}, out = [];
+  S.lottos.concat(S.orders.map(function (o) { return o.lotto; })).forEach(function (n) { if (n && !set[n]) { set[n] = 1; out.push(n); } });
+  return out;
+}
+
+function loadResults() {
+  var iso = $("resDate").value || todayIso(), round = isoToRound(iso);
+  $("resDate").value = iso;
+  $("resList").innerHTML = '<div class="empty">กำลังโหลดผล…</div>';
+  return post({ action: "adminResults", dates: [round], names: allNames() }).then(function (d) {
+    if (d.rates) { S.rates = d.rates; renderRates(); }
+    S.res[round] = (d.results || {})[round] || {};
+    renderResults(round);
+  }).catch(function (e) { $("resList").innerHTML = ""; err(e); });
+}
+
+function renderResults(round) {
+  var day = S.res[round] || {};
+  var stake = {};
+  S.orders.forEach(function (o) { if (o.drawDate === round && !o.cancelled) stake[o.lotto] = (stake[o.lotto] || 0) + o.total; });
+  var names = allNames();
+  Object.keys(day).forEach(function (n) { if (names.indexOf(n) < 0) names.push(n); });
+  // หวยที่มีคนแทงขึ้นก่อน
+  names.sort(function (a, b) { return (stake[b] ? 1 : 0) - (stake[a] ? 1 : 0); });
+  $("resList").innerHTML = names.map(function (n) {
+    var r = day[n] || {};
+    var badge = r.source === "manual" ? '<span class="pill man">แก้เอง</span>' : r.source === "api" ? '<span class="pill api">API</span>' : '<span class="pill wait">ยังไม่มีผล</span>';
+    return '<div class="res-row" data-name="' + esc(n) + '">' +
+      '<div><b>' + esc(n) + '</b> ' + badge + (stake[n] ? '<div class="muted">ยอดแทง ' + fmt(stake[n]) + ' ฿</div>' : '') + '</div>' +
+      '<input class="t" inputmode="numeric" maxlength="3" placeholder="---" value="' + esc(r.top || "") + '">' +
+      '<input class="b" inputmode="numeric" maxlength="2" placeholder="--" value="' + esc(r.bottom || "") + '">' +
+      '<div class="acts"><button class="btn sm green" data-save>บันทึก</button>' +
+      (r.source === "manual" ? '<button class="btn sm" data-clear>ล้าง</button>' : '') + '</div></div>';
+  }).join("");
+}
+
+function saveResult(name, top, bottom, btn) {
+  var round = isoToRound($("resDate").value || todayIso());
+  top = String(top || "").replace(/\D/g, ""); bottom = String(bottom || "").replace(/\D/g, "");
+  if ((top || bottom) && (top.length !== 3 || bottom.length !== 2)) { err("ผลต้องเป็น 3 ตัวบน และ 2 ตัวล่าง"); return Promise.resolve(false); }
+  if (btn) btn.disabled = true;
+  err();
+  return post({ action: "adminSetResult", lotto: name, drawDate: round, top: top, bottom: bottom })
+    .then(loadResults).then(function () { return true; })
+    .catch(function (e) { if (btn) btn.disabled = false; err(e); return false; });
+}
+
+$("resList").addEventListener("click", function (e) {
+  var row = e.target.closest(".res-row"); if (!row) return;
+  if (e.target.closest("[data-save]")) saveResult(row.dataset.name, row.querySelector(".t").value, row.querySelector(".b").value, e.target);
+  if (e.target.closest("[data-clear]")) saveResult(row.dataset.name, "", "", e.target);
+});
+$("addBtn").addEventListener("click", function () {
+  var n = $("addName").value.trim();
+  if (!n) { err("พิมพ์ชื่อหวยก่อน"); return; }
+  if (!$("addTop").value || !$("addBottom").value) { err("ใส่ผล 3 ตัวบน และ 2 ตัวล่าง"); return; }
+  saveResult(n, $("addTop").value, $("addBottom").value, $("addBtn")).then(function (ok) {
+    $("addBtn").disabled = false;
+    if (ok) { $("addName").value = ""; $("addTop").value = ""; $("addBottom").value = ""; }
+  });
+});
+$("resDate").addEventListener("change", loadResults);
+$("resReload").addEventListener("click", loadResults);
+
+/* ===================== สรุปแพ้-ชนะ ===================== */
+function renderChips() {
+  var names = allNames();
+  $("chips").innerHTML = names.map(function (n) {
+    return '<button class="chip' + (S.chipsOff[n] ? "" : " on") + '" data-n="' + esc(n) + '"><i>✓</i>' + esc(n) + '</button>';
+  }).join("");
+  var on = names.filter(function (n) { return !S.chipsOff[n]; }).length;
+  $("chipCount").textContent = "เลือกแล้ว " + on + "/" + names.length;
+}
+$("chips").addEventListener("click", function (e) {
+  var c = e.target.closest(".chip"); if (!c) return;
+  var n = c.dataset.n;
+  if (S.chipsOff[n]) delete S.chipsOff[n]; else S.chipsOff[n] = 1;
+  renderChips();
+});
+$("chipAll").addEventListener("click", function () { S.chipsOff = {}; renderChips(); });
+$("chipNone").addEventListener("click", function () { allNames().forEach(function (n) { S.chipsOff[n] = 1; }); renderChips(); });
+
+function syncRange() {
+  var p = document.querySelector("#period input:checked").value;
+  if (p === "custom") return;
+  var r = periodRange(p);
+  $("from").value = r[0]; $("to").value = r[1];
+}
+$("period").addEventListener("change", syncRange);
+["from", "to"].forEach(function (id) {
+  $(id).addEventListener("change", function () { document.querySelector('#period input[value="custom"]').checked = true; });
+});
+
+function search() {
+  var p = document.querySelector("#period input:checked").value;
+  var r = periodRange(p), from = r[0], to = r[1];
+  if (from > to) { var t = from; from = to; to = t; }
+  var dates = [];
+  for (var d = from; d <= to && dates.length < 62; d = addDays(d, 1)) dates.push(isoToRound(d));
+  var set = {}; dates.forEach(function (x) { set[x] = 1; });
+  var orders = S.orders.filter(function (o) { return set[o.drawDate] && !o.cancelled && !S.chipsOff[o.lotto]; });
+  $("sumOut").innerHTML = '<div class="empty">กำลังคำนวณ…</div>';
+  err();
+  if (!orders.length) { $("sumOut").innerHTML = '<div class="empty">ไม่มีโพยในช่วงนี้</div>'; return; }
+  var useDates = Object.keys(orders.reduce(function (m, o) { m[o.drawDate] = 1; return m; }, {}));
+  var names = Object.keys(orders.reduce(function (m, o) { m[o.lotto] = 1; return m; }, {}));
+  $("search").disabled = true;
+  post({ action: "adminResults", dates: useDates, names: names }).then(function (d) {
+    if (d.rates) { S.rates = d.rates; renderRates(); }
+    renderSummary(orders, d.results || {}, from, to);
+  }).catch(function (e) { $("sumOut").innerHTML = ""; err(e); })
+    .then(function () { $("search").disabled = false; });
+}
+$("search").addEventListener("click", search);
+
+function renderSummary(orders, results, from, to) {
+  var rows = {}, cust = {}, winners = [];
+  var T = { stake: 0, pay: 0, wait: 0, slips: orders.length };
+  orders.forEach(function (o) {
+    var res = (results[o.drawDate] || {})[o.lotto];
+    var key = o.drawDate + "|" + o.lotto;
+    var row = rows[key] || (rows[key] = { round: o.drawDate, lotto: o.lotto, stake: 0, pay: 0, slips: 0, res: res });
+    var c = cust[o.name] || (cust[o.name] = { name: o.name, stake: 0, pay: 0, wait: 0, slips: 0 });
+    row.stake += o.total; row.slips++;
+    c.stake += o.total; c.slips++;
+    T.stake += o.total;
+    if (!res) { T.wait += o.total; c.wait += o.total; return; }
+    hitsOf(o, res).forEach(function (h) {
+      row.pay += h.pay; c.pay += h.pay; T.pay += h.pay;
+      winners.push({ round: o.drawDate, lotto: o.lotto, name: o.name, ref: o.ref, num: h.num, kind: h.kind, bet: h.bet, pay: h.pay });
+    });
+  });
+  var profit = T.stake - T.wait - T.pay;
+  function cls(n) { return n > 0 ? "pos" : n < 0 ? "neg" : ""; }
+  function signed(n) { return (n > 0 ? "+" : "") + fmt(n); }
+
+  var rowList = Object.keys(rows).map(function (k) { return rows[k]; })
+    .sort(function (a, b) { return roundKey(b.round).localeCompare(roundKey(a.round)) || b.stake - a.stake; });
+  var custList = Object.keys(cust).map(function (k) { return cust[k]; }).sort(function (a, b) { return b.stake - a.stake; });
+  winners.sort(function (a, b) { return b.pay - a.pay; });
+
+  var head = from === to ? thDate(from) : thDate(from) + " – " + thDate(to);
+  var h = '<div class="card" style="display:flex;justify-content:space-between;align-items:center"><b>ข้อมูล ' + esc(head) + '</b><span class="muted">' + T.slips + ' โพย</span></div>';
+  h += '<div class="stats">' +
+    '<div class="stat"><div class="muted">ยอดแทง</div><div class="v gray">' + fmt(T.stake) + '</div></div>' +
+    '<div class="stat"><div class="muted">จ่ายถูกรางวัล</div><div class="v neg">' + fmt(T.pay) + '</div></div>' +
+    '<div class="stat"><div class="muted">ร้านได้/เสีย (ออกผลแล้ว)</div><div class="v ' + cls(profit) + '">' + signed(profit) + '</div></div>' +
+    '<div class="stat"><div class="muted">รอผล</div><div class="v gray">' + fmt(T.wait) + '</div></div></div>';
+
+  h += '<div class="card"><h3>แยกตามหวย</h3><div class="tw"><table><tr><th>หวย</th><th>งวด</th><th>ผล</th><th>โพย</th><th>ยอดแทง</th><th>จ่าย</th><th>ร้านได้/เสีย</th></tr>' +
+    rowList.map(function (r) {
+      var net = r.res ? r.stake - r.pay : null;
+      return '<tr><td>' + esc(r.lotto) + '</td><td>' + esc(r.round) + '</td><td>' +
+        (r.res ? '<b>' + esc(r.res.top) + ' - ' + esc(r.res.bottom) + '</b>' : '<span class="pill wait">รอผล</span>') +
+        '</td><td>' + r.slips + '</td><td>' + fmt(r.stake) + '</td><td>' + (r.res ? fmt(r.pay) : '-') + '</td><td class="' + (net == null ? "" : cls(net)) + '">' + (net == null ? '-' : signed(net)) + '</td></tr>';
+    }).join("") + '</table></div></div>';
+
+  h += '<div class="card"><h3>โพยที่ถูกรางวัล <span class="muted">' + winners.length + ' รายการ</span></h3>' +
+    (winners.length ? '<div class="tw"><table><tr><th>ลูกค้า</th><th>หวย</th><th>งวด</th><th>ประเภท</th><th>เลข</th><th>แทง</th><th>ได้</th></tr>' +
+      winners.map(function (w) {
+        return '<tr><td>' + esc(w.name) + '<div class="muted">' + esc(w.ref) + '</div></td><td>' + esc(w.lotto) + '</td><td>' + esc(w.round) + '</td><td>' + esc(w.kind) +
+          '</td><td><b>' + esc(w.num) + '</b></td><td>' + fmt(w.bet) + '</td><td class="pos">' + fmt(w.pay) + '</td></tr>';
+      }).join("") + '</table></div>' : '<div class="muted">ยังไม่มีโพยถูกรางวัล</div>') + '</div>';
+
+  h += '<div class="card"><h3>แยกตามลูกค้า</h3><div class="tw"><table><tr><th>ลูกค้า</th><th>โพย</th><th>ยอดแทง</th><th>ถูกรางวัล</th><th>รอผล</th><th>ลูกค้าได้/เสีย</th></tr>' +
+    custList.map(function (c) {
+      var net = c.pay - (c.stake - c.wait);
+      return '<tr><td>' + esc(c.name || "-") + '</td><td>' + c.slips + '</td><td>' + fmt(c.stake) + '</td><td>' + fmt(c.pay) + '</td><td>' + (c.wait ? fmt(c.wait) : '-') + '</td><td class="' + cls(net) + '">' + signed(net) + '</td></tr>';
+    }).join("") + '</table></div></div>';
+
+  $("sumOut").innerHTML = h;
+}
+
+/* ===================== ทั่วไป ===================== */
 $("loginBtn").addEventListener("click", login);
 $("key").addEventListener("keydown", function (e) { if (e.key === "Enter") login(); });
-$("refresh").addEventListener("click", function () { $("mainErr").textContent = ""; load().catch(function (e) { $("mainErr").textContent = e.message; }); });
+$("refresh").addEventListener("click", function () {
+  err();
+  load().then(function () { if (TAB === "results") return loadResults(); if (TAB === "summary" && $("sumOut").innerHTML) search(); })
+    .catch(err);
+});
 $("logout").addEventListener("click", function () { try { sessionStorage.removeItem(KEY_STORE); } catch (e) {} location.reload(); });
 
+$("resDate").value = todayIso();
+syncRange();
 try { var k = sessionStorage.getItem(KEY_STORE); if (k) { $("key").value = k; login(); } } catch (e) {}
 </script>
 </body>
