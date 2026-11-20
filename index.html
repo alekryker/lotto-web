@@ -1239,7 +1239,7 @@ function confirmAndSend() {
   }
 
   var customer = { name: String(els.customerName.value || "").trim() };
-  if (!customer.name) {
+  if (!customer.name && !state.importMode) {   /* ลงจากส่วนขยาย: ชื่อว่างได้ (เช่น ไลน์ของแอดมิน) */
     els.confirmError.textContent = "กรุณากรอกชื่อผู้แทง";
     els.customerName.focus();
     return fail("กรุณากรอกชื่อผู้แทง");
@@ -1733,6 +1733,7 @@ var LottoImport = (function () {
     clearPrices();
     renderBills();
     state.selectedLotto = null;
+    state.importMode = false;
   }
 
   function addParsedBill(p) {
@@ -1773,6 +1774,7 @@ var LottoImport = (function () {
     return whenBooted(20000)
       .then(function () {
         resetPage();
+        state.importMode = true;
         var parsed = parse(String(o.text || ""), o.lotto);
         if (isClosed(parsed.lotto)) {
           var ce = new Error(parsed.lotto.name + " ปิดรับแล้ว");

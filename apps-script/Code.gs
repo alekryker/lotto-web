@@ -179,7 +179,7 @@ var LEN_BY_MODE = { two_top: 2, two_bottom: 2, three_top: 3, three_tod: 3, three
 function createOrder_(body) {
   var name = String(body.customerName || '').trim().slice(0, 60);
   var phone = String(body.customerPhone || '').replace(/[^\d+]/g, '').slice(0, 20);
-  if (!name) throw new Error('กรุณากรอกชื่อผู้แทง');
+  // ชื่อว่างได้ (ส่วนขยายลงโพยให้ไลน์แอดมินโดยไม่ใส่ชื่อ) — หน้าเว็บปกติบังคับกรอกชื่อเอง
 
   var lotto = readLottos_().filter(function (l) { return l.name === body.lottoName; })[0];
   if (!lotto || !lotto.open) throw new Error('หวยนี้ไม่เปิดรับ');
