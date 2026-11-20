@@ -489,9 +489,13 @@ function readApiJson(res) {
 }
 
 /* ===================== BOOT ===================== */
+var bootResolve;
+var bootReady = new Promise(function (r) { bootResolve = r; });
+
 function initBoot(data) {
   state.lottos = data.lottos || [];
   state.bank = data.bank || null;
+  bootResolve(true);
   renderLottoCards();
   showLottoScreen();
 }
@@ -1222,21 +1226,23 @@ function createBetCard(bill) {
 }
 
 /* ===================== SEND (ไม่ใช้ LINE) ===================== */
+/* คืน Promise<{ok, ref, error}> (ส่วนขยายรอผลจากตรงนี้ ไม่ต้องวนเช็กหน้าจอ) */
 function confirmAndSend() {
-  if (state.sending) return;
-  if (!state.pendingPayloads || !state.pendingPayloads.length) return;
+  var fail = function (msg) { return Promise.resolve({ ok: false, error: msg }); };
+  if (state.sending) return fail("กำลังส่งอยู่");
+  if (!state.pendingPayloads || !state.pendingPayloads.length) return fail("ไม่มีโพยรอยืนยัน");
 
   if (state.selectedLotto && isClosed(state.selectedLotto)) {
     closeConfirm();
     showError("หวยนี้ปิดรับแล้ว");
-    return;
+    return fail("หวยนี้ปิดรับแล้ว");
   }
 
   var customer = { name: String(els.customerName.value || "").trim() };
   if (!customer.name) {
     els.confirmError.textContent = "กรุณากรอกชื่อผู้แทง";
     els.customerName.focus();
-    return;
+    return fail("กรุณากรอกชื่อผู้แทง");
   }
   saveCustomer(customer);
 
@@ -1248,7 +1254,7 @@ function confirmAndSend() {
   closeConfirm();
   setLoading(true);
 
-  apiCreateOrder({
+  return apiCreateOrder({
     customerName: customer.name,
     lottoName: lottoName,
     items: payloads.map(toApiItem)
@@ -1258,11 +1264,13 @@ function confirmAndSend() {
     state.pendingPayloads = null;
     setLoading(false);
     showDone({ orderRef: res.ref, customer: customer, total: res.total, bills: billsSnapshot, lottoName: lottoName });
+    return { ok: true, ref: res.ref };
   })
   .catch(function (err) {
     state.sending = false;
     setLoading(false);
     showError(err);
+    return { ok: false, error: formatError(err) };
   });
 }
 
@@ -1397,6 +1405,150 @@ function escapeHtml(s) {
      12 บน 10 / 12 ล่าง 10       ← ราคาเดียว
    บรรทัดที่มีแต่เลข จะรอราคาจากบรรทัดถัดไป
 ====================================================== */
+/* =====================================================
+   วาดรูป "ตรวจสอบโพย" ด้วย canvas (ไม่ต้องแคปหน้าจอ)
+   ทำงานได้แม้แท็บซ่อน / จอล็อก / พักจอ
+   คืนค่า PNG base64
+====================================================== */
+function renderSlipImage(customerName) {
+  var FONT = '"Anuphan", system-ui, sans-serif';
+  var fontsReady = (document.fonts && document.fonts.load)
+    ? Promise.all(["700 40px", "600 22px", "500 18px"].map(function (f) { return document.fonts.load(f + " Anuphan"); })).catch(function () {})
+    : Promise.resolve();
+
+  return fontsReady.then(function () {
+    var W = 720, S = 2, PAD = 24, IN = 20;
+    var lotto = state.selectedLotto || {};
+    var bills = state.bills.slice();
+    var total = getGrandTotal();
+    var count = bills.reduce(function (s, b) { return s + b.betCount; }, 0);
+
+    var canvas = document.createElement("canvas");
+    var ctx = canvas.getContext("2d");
+    function font(w, px) { ctx.font = w + " " + px + "px " + FONT; }
+    function tw(t) { return ctx.measureText(t).width; }
+    function rr(x, y, w, h, r, fill, stroke, dash) {
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.setLineDash(dash || []); ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); }
+    }
+    function text(t, x, y, w, px, color, align) {
+      font(w, px); ctx.fillStyle = color; ctx.textAlign = align || "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(t, x, y);
+    }
+
+    /* วางเม็ด (pill) เรียงต่อกันแล้วขึ้นบรรทัดใหม่ → คืนความสูงที่ใช้ */
+    function pills(items, x, y, maxW, h, gap, w, px, draw, style) {
+      font(w, px);
+      var cx = x, cy = y;
+      items.forEach(function (it) {
+        var pw = Math.max(style.minW || 0, tw(it) + style.padX * 2);
+        if (cx + pw > x + maxW && cx > x) { cx = x; cy += h + gap; }
+        if (draw) {
+          rr(cx, cy, pw, h, style.radius, style.bg, style.border);
+          text(it, cx + pw / 2, cy + h / 2 + px * 0.36, w, px, style.color, "center");
+        }
+        cx += pw + gap;
+      });
+      return items.length ? cy + h - y : 0;
+    }
+
+    function billTags(b) {
+      var mode = MODES[b.mode], t = [];
+      if (b.priceA > 0) t.push({ s: mode.priceA + " " + numberWithCommas(b.priceA), red: true });
+      if (mode.priceB && b.priceB > 0) t.push({ s: mode.priceB + " " + numberWithCommas(b.priceB), red: true });
+      t.push({ s: b.numbers.length !== b.betCount ? b.numbers.length + " เลข · " + b.betCount + " รายการ" : b.betCount + " ตัว" });
+      if (b.mode === "gate19") t.push({ s: "ตั้งต้น " + b.sourceNumbers.join(", ") });
+      if (b.reverseApplied) t.push({ s: "กลับเลข" });
+      return t;
+    }
+
+    /* วาด 2 รอบ: รอบแรกวัดความสูง รอบสองวาดจริง */
+    function layout(draw) {
+      var y = 0, cw = W - PAD * 2;
+
+      // ---- หัว: ชื่อหวย ----
+      var nameSize = 40;
+      font("700", nameSize);
+      while (tw(lotto.name || "-") > W - PAD * 2 && nameSize > 24) { nameSize -= 2; font("700", nameSize); }
+      var HEAD = 168;
+      if (draw) {
+        var g = ctx.createLinearGradient(0, 0, W, HEAD);
+        g.addColorStop(0, "#6d1222"); g.addColorStop(.55, "#a3162d"); g.addColorStop(1, "#d7203b");
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, HEAD);
+        text("ตรวจสอบโพย", PAD, 42, "500", 18, "rgba(255,255,255,.75)");
+        text(lotto.name || "-", PAD, 94, "700", nameSize, "#ffffff");
+        var chips = ["งวด " + (lotto.name ? getRoundDateText(lotto) : "-"), "ปิดรับ " + (lotto.closeTime || "--:--")];
+        pills(chips, PAD, 114, cw, 32, 8, "600", 16, true, { padX: 14, radius: 16, bg: "rgba(255,255,255,.18)", color: "#ffffff" });
+      }
+      y = HEAD + 22;
+
+      // ---- รายการ ----
+      if (draw) text("รายการที่แทง", PAD, y + 16, "600", 18, "#52525b");
+      y += 30;
+
+      bills.forEach(function (b) {
+        var x = PAD, iw = cw - IN * 2;
+        // วัดความสูงการ์ด
+        var tagH = pills(billTags(b).map(function (t) { return t.s; }), x + IN, 0, iw, 30, 6, "600", 16, false, { padX: 12 });
+        var numH = pills(b.numbers, x + IN, 0, iw, 46, 8, "600", 22, false, { padX: 12, minW: 62 });
+        var h = IN + 30 + 10 + tagH + 14 + numH + IN;
+        if (draw) {
+          rr(x, y, cw, h, 18, "#ffffff", "#e4e4e7");
+          text(billLabel(b), x + IN, y + IN + 24, "700", 24, "#18181b");
+          text(numberWithCommas(b.subtotal) + " ฿", x + cw - IN, y + IN + 24, "700", 24, "#18181b", "right");
+          var ty = y + IN + 40;
+          // ป้าย: แดง = ราคา, เทา = จำนวน
+          font("600", 16);
+          var cx = x + IN, cy = ty;
+          billTags(b).forEach(function (t) {
+            var pw = tw(t.s) + 24;
+            if (cx + pw > x + IN + iw && cx > x + IN) { cx = x + IN; cy += 36; }
+            rr(cx, cy, pw, 30, 15, t.red ? "#fff1f2" : "#f4f4f5");
+            text(t.s, cx + pw / 2, cy + 21, "600", 16, t.red ? "#c9152d" : "#52525b", "center");
+            cx += pw + 6;
+          });
+          pills(b.numbers, x + IN, ty + tagH + 14, iw, 46, 8, "600", 22, true, { padX: 12, minW: 62, radius: 10, bg: "#fafafa", border: "#ececef", color: "#27272a" });
+        }
+        y += h + 14;
+      });
+
+      // ---- ยอดรวม ----
+      var TH = 104;
+      if (draw) {
+        var g2 = ctx.createLinearGradient(PAD, y, PAD + cw, y + TH);
+        g2.addColorStop(0, "#8f1427"); g2.addColorStop(1, "#d7203b");
+        rr(PAD, y, cw, TH, 20, g2);
+        text("ยอดรวม", PAD + 24, y + 44, "700", 24, "#ffffff");
+        text(numberWithCommas(count) + " รายการ · " + bills.length + " บิล", PAD + 24, y + 74, "500", 17, "rgba(255,255,255,.85)");
+        font("600", 22); var unitW = tw("บาท");
+        text("บาท", PAD + cw - 24, y + 70, "600", 22, "#ffffff", "right");
+        text(numberWithCommas(total), PAD + cw - 24 - unitW - 8, y + 72, "700", 54, "#ffffff", "right");
+      }
+      y += TH + 14;
+
+      // ---- ผู้แทง ----
+      var CH = 64;
+      if (draw) {
+        rr(PAD, y, cw, CH, 18, "#ffffff", "#d4d4d8", [6, 5]);
+        text("ผู้แทง", PAD + 20, y + 40, "500", 18, "#71717a");
+        font("500", 18);
+        text(customerName || "-", PAD + 20 + tw("ผู้แทง") + 16, y + 41, "700", 24, "#18181b");
+      }
+      y += CH + PAD;
+      return y;
+    }
+
+    canvas.width = W * S; canvas.height = 10;
+    ctx.scale(S, S);
+    var H = Math.ceil(layout(false));
+    canvas.width = W * S; canvas.height = H * S;     // รีเซ็ต context
+    ctx.scale(S, S);
+    ctx.fillStyle = "#f7f7f9"; ctx.fillRect(0, 0, W, H);
+    layout(true);
+    return canvas.toDataURL("image/png").split(",")[1];
+  });
+}
+
 var LottoImport = (function () {
   var THAI_DIGITS = "๐๑๒๓๔๕๖๗๘๙";
 
@@ -1562,17 +1714,13 @@ var LottoImport = (function () {
     return { lotto: lotto, bills: bills };
   }
 
-  function waitFor(fn, ms) {
-    var t0 = Date.now();
-    return new Promise(function (resolve, reject) {
-      (function tick() {
-        var v;
-        try { v = fn(); } catch (e) { v = null; }
-        if (v) return resolve(v);
-        if (Date.now() - t0 > ms) return reject(new Error("หมดเวลารอ"));
-        setTimeout(tick, 150);
-      })();
-    });
+  /* รอรายการหวยโหลดเสร็จ (ใช้ promise + ตัวจับเวลาตัวเดียว ไม่วนเช็ก) */
+  function whenBooted(ms) {
+    if (state.lottos.length) return Promise.resolve(true);
+    return Promise.race([
+      bootReady,
+      new Promise(function (_, rej) { setTimeout(function () { rej(new Error("โหลดรายการหวยไม่สำเร็จ")); }, ms || 20000); })
+    ]);
   }
 
   function resetPage() {
@@ -1620,10 +1768,9 @@ var LottoImport = (function () {
     if (state.bills.length !== n + 1) throw new Error(els.error.textContent || "เพิ่มบิลไม่สำเร็จ");
   }
 
-  /* ลงโพยแล้วเปิดหน้าตรวจสอบในโหมดแคป → คืนตำแหน่งกล่องสำหรับครอปรูป */
+  /* ลงโพย → เปิดหน้าตรวจสอบ (รอกดยืนยัน) → วาดรูปโพยด้วย canvas (ทำงานได้แม้จอล็อก/แท็บซ่อน) */
   function fill(o) {
-    return waitFor(function () { return state.lottos.length; }, 20000)
-      .catch(function () { throw new Error("โหลดรายการหวยไม่สำเร็จ"); })
+    return whenBooted(20000)
       .then(function () {
         resetPage();
         var parsed = parse(String(o.text || ""), o.lotto);
@@ -1637,25 +1784,16 @@ var LottoImport = (function () {
         openConfirm();
         if (!els.confirmOverlay.classList.contains("show")) throw new Error(els.error.textContent || "เปิดหน้าตรวจสอบไม่สำเร็จ");
         els.customerName.value = String(o.name || "").trim();
-        document.body.classList.add("capturing");
-        window.scrollTo(0, 0);
-        return new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+        return renderSlipImage(els.customerName.value);
       })
-      .then(function () {
-        // โพยยาวกว่าหน้าจอ → ย่อทั้งกล่องให้พอดี จะได้แคปครบ
-        var dlg = document.querySelector("#confirmOverlay .dialog");
-        dlg.style.zoom = "";
-        var h0 = dlg.getBoundingClientRect().height;
-        if (h0 > window.innerHeight) dlg.style.zoom = String(Math.max(0.35, (window.innerHeight - 2) / h0));
-        var rc = dlg.getBoundingClientRect();
+      .then(function (image) {
         return {
           ok: true,
           lotto: parsed_name(),
           total: getGrandTotal(),
           count: state.bills.reduce(function (s, b) { return s + b.betCount; }, 0),
-          rect: { x: rc.left, y: rc.top, width: rc.width, height: Math.min(rc.height, window.innerHeight - rc.top) },
-          bank: state.bank || null,
-          vw: window.innerWidth
+          image: image,
+          bank: state.bank || null
         };
       })
       .catch(function (e) {
@@ -1684,18 +1822,10 @@ var LottoImport = (function () {
     document.body.classList.remove("capturing");
     if (!els.confirmOverlay.classList.contains("show")) return Promise.resolve({ ok: false, error: "ไม่มีโพยรอยืนยัน" });
     els.error.textContent = "";
-    confirmAndSend();
-    return waitFor(function () {
-      if (els.doneOverlay.classList.contains("show")) return { done: true };
-      if (!state.sending && els.error.textContent) return { err: els.error.textContent };
-      if (els.confirmOverlay.classList.contains("show") && els.confirmError.textContent) return { err: els.confirmError.textContent };
-      return null;
-    }, 60000).then(function (r) {
-      if (r.err) return { ok: false, error: r.err };
-      var ref = (els.doneSubtitle.textContent.split("เลขที่ ")[1] || "").trim();
-      finishOrder();
-      return { ok: true, ref: ref };
-    }).catch(function (e) { return { ok: false, error: e.message }; });
+    return confirmAndSend().then(function (r) {
+      if (r.ok) finishOrder();
+      return r;
+    });
   }
 
   function cancel() { resetPage(); showLottoScreen(); return { ok: true }; }
@@ -1712,7 +1842,7 @@ var LottoImport = (function () {
   }
 
   function check(o) {
-    return waitFor(function () { return state.lottos.length; }, 20000)
+    return whenBooted(20000)
       .then(function () {
         var text = String((o && o.text) || "");
         try {
@@ -1734,7 +1864,7 @@ var LottoImport = (function () {
       .catch(function () { return { ok: false, isSlip: false, error: "โหลดรายการหวยไม่สำเร็จ" }; });
   }
 
-  return { parse: parse, check: check, fill: fill, endCapture: endCapture, submit: submit, cancel: cancel };
+  return { parse: parse, check: check, fill: fill, endCapture: endCapture, submit: submit, cancel: cancel, render: renderSlipImage, version: 4 };
 })();
 window.LottoImport = LottoImport;
 </script>
