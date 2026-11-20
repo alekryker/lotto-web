@@ -222,7 +222,7 @@ function post(body) {
 
 function load() {
   return post({ action: "adminOrders" }).then(function (d) {
-    S.orders = d.orders || [];
+    S.orders = (d.orders || []).map(function (o) { o.drawDate = fixRound(o.drawDate); return o; });
     S.lottos = d.lottos || [];
     if (d.rates) S.rates = d.rates;
     fillRounds();
@@ -248,6 +248,14 @@ function todayIso() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/
 function addDays(iso, n) { var d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function isoToRound(iso) { var p = iso.split("-"); return p[2] + "-" + p[1] + "-" + p[0]; }
 function roundToIso(r) { var m = String(r).match(/(\d{2})-(\d{2})-(\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; }
+/* งวดในชีตถูกแปลงเป็นวันที่ (เช่น "Fri Nov 20 2026 ...") → กลับเป็น dd-MM-yyyy */
+function fixRound(r) {
+  r = String(r || "").trim();
+  if (/^\d{2}-\d{2}-\d{4}$/.test(r)) return r;
+  var t = new Date(r);
+  if (isNaN(t)) return r;
+  return isoToRound(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(t));
+}
 function roundKey(d) { return roundToIso(d) || String(d); }
 function thDate(iso) {
   return new Date(iso + "T12:00:00Z").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" });
@@ -263,6 +271,54 @@ function periodRange(p) {
   if (p === "lastmonth") return [new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10), new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)];
   return [$("from").value || t, $("to").value || t];
 }
+
+/* ===================== ผลหวยสำรอง (ดึงจาก API ตรงจากเบราว์เซอร์) =====================
+ * ใช้เมื่อเซิร์ฟเวอร์ดึงผลไม่ได้ (เช่น ยังไม่ได้ให้สิทธิ์ UrlFetchApp) — ไม่มีผลที่แก้เอง */
+var RESULTS_API = "https://livehuay.netlify.app/api/results-all";
+function normName(s) {
+  return String(s || "").toLowerCase().replace(/[^\u0E00-\u0E7Fa-z0-9]/g, "")
+    .replace(/หุ้น|หวย|ปกติ/g, "").replace(/ทีวี/g, "tv").replace(/extar/g, "extra");
+}
+var aliasCache = null;
+function loadAliases() {
+  if (aliasCache) return Promise.resolve(aliasCache);
+  return fetch(API + "?action=boot").then(function (r) { return r.json(); }).then(function (d) {
+    aliasCache = {};
+    (d.lottos || []).forEach(function (l) { aliasCache[l.name] = l.aliases || []; });
+    return aliasCache;
+  }).catch(function () { return (aliasCache = {}); });
+}
+function clientResults(dates, names) {
+  return loadAliases().then(function (al) {
+    return Promise.all(dates.map(function (d) {
+      var iso = roundToIso(d);
+      return fetch(RESULTS_API + "?date=" + iso).then(function (r) { return r.json(); }).catch(function () { return {}; }).then(function (j) {
+        var idx = {};
+        (j.date === iso ? j.results || [] : []).forEach(function (x) {
+          if (x.top && x.bottom) { var k = normName(x.name); if (!idx[k]) idx[k] = { top: String(x.top), bottom: String(x.bottom), source: "api", apiName: x.name }; }
+        });
+        var day = {};
+        names.forEach(function (n) {
+          var keys = [n].concat(al[n] || []).map(normName);
+          for (var i = 0; i < keys.length; i++) if (idx[keys[i]]) { day[n] = idx[keys[i]]; break; }
+        });
+        return [d, day];
+      });
+    })).then(function (pairs) { var o = {}; pairs.forEach(function (p) { o[p[0]] = p[1]; }); return o; });
+  });
+}
+/** ผลหวย: เซิร์ฟเวอร์ก่อน (มีผลที่แก้เอง) → พังแล้วใช้ API ตรง */
+function getResults(dates, names) {
+  return post({ action: "adminResults", dates: dates, names: names }).then(function (d) {
+    if (d.rates) { S.rates = d.rates; renderRates(); }
+    return { results: d.results || {}, warn: "" };
+  }).catch(function (e) {
+    return clientResults(dates, names).then(function (r) {
+      return { results: r, warn: "ดึงผลจากเซิร์ฟเวอร์ไม่ได้ (" + e.message + ") — ใช้ผลจาก API ตรงแทน ผลที่แก้เองจะยังไม่ถูกนับ · วิธีแก้: เปิด Apps Script กด Run ฟังก์ชัน setup แล้วกดยอมรับสิทธิ์" };
+    });
+  });
+}
+function warnBox(t) { return t ? '<div class="card" style="border-color:#fca5a5;background:#fef2f2;color:#b91c1c;font-weight:600">⚠️ ' + esc(t) + '</div>' : ""; }
 
 /* ===================== คิดเงินถูกรางวัล ===================== */
 function rates() { return S.rates || RATE_DEFAULT; }
@@ -394,11 +450,11 @@ function loadResults() {
   var iso = $("resDate").value || todayIso(), round = isoToRound(iso);
   $("resDate").value = iso;
   $("resList").innerHTML = '<div class="empty">กำลังโหลดผล…</div>';
-  return post({ action: "adminResults", dates: [round], names: allNames() }).then(function (d) {
-    if (d.rates) { S.rates = d.rates; renderRates(); }
-    S.res[round] = (d.results || {})[round] || {};
+  return getResults([round], allNames()).then(function (d) {
+    S.res[round] = d.results[round] || {};
     renderResults(round);
-  }).catch(function (e) { $("resList").innerHTML = ""; err(e); });
+    if (d.warn) $("resList").insertAdjacentHTML("afterbegin", warnBox(d.warn));
+  }).catch(function (e) { $("resList").innerHTML = warnBox(e.message); });
 }
 
 function renderResults(round) {
@@ -488,14 +544,20 @@ function search() {
   var orders = S.orders.filter(function (o) { return set[o.drawDate] && !o.cancelled && !S.chipsOff[o.lotto]; });
   $("sumOut").innerHTML = '<div class="empty">กำลังคำนวณ…</div>';
   err();
-  if (!orders.length) { $("sumOut").innerHTML = '<div class="empty">ไม่มีโพยในช่วงนี้</div>'; return; }
+  if (!orders.length) {
+    var have = {}; S.orders.forEach(function (o) { if (!o.cancelled) have[o.drawDate] = 1; });
+    var recent = Object.keys(have).sort(function (a, b) { return roundKey(b).localeCompare(roundKey(a)); }).slice(0, 5);
+    $("sumOut").innerHTML = '<div class="empty">ไม่มีโพยในช่วง ' + esc(isoToRound(from)) + ' ถึง ' + esc(isoToRound(to)) +
+      (recent.length ? '<br>งวดที่มีโพยล่าสุด: ' + esc(recent.join(", ")) : '') + '</div>';
+    return;
+  }
   var useDates = Object.keys(orders.reduce(function (m, o) { m[o.drawDate] = 1; return m; }, {}));
   var names = Object.keys(orders.reduce(function (m, o) { m[o.lotto] = 1; return m; }, {}));
   $("search").disabled = true;
-  post({ action: "adminResults", dates: useDates, names: names }).then(function (d) {
-    if (d.rates) { S.rates = d.rates; renderRates(); }
-    renderSummary(orders, d.results || {}, from, to);
-  }).catch(function (e) { $("sumOut").innerHTML = ""; err(e); })
+  getResults(useDates, names).then(function (d) {
+    renderSummary(orders, d.results, from, to);
+    if (d.warn) $("sumOut").insertAdjacentHTML("afterbegin", warnBox(d.warn));
+  }).catch(function (e) { $("sumOut").innerHTML = warnBox(e.message); })
     .then(function () { $("search").disabled = false; });
 }
 $("search").addEventListener("click", search);

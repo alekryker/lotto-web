@@ -234,7 +234,7 @@ function listOrders_() {
     return {
       time: r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd HH:mm:ss') : String(r[0]),
       ref: String(r[1]), name: String(r[2]), phone: String(r[3]),
-      lotto: String(r[4]), drawDate: String(r[5]), total: Number(r[6]) || 0, items: items,
+      lotto: String(r[4]), drawDate: r[5] instanceof Date ? Utilities.formatDate(r[5], TZ, 'dd-MM-yyyy') : String(r[5]), total: Number(r[6]) || 0, items: items,
       cancelled: String(r[8] || '') === 'ยกเลิก'
     };
   });
